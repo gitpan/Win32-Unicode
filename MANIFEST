@@ -38,12 +38,12 @@ t/05_write.t
 t/06_dir.t
 t/07_file.t
 t/07_files/10byte.txt
-t/07_files/dir/dammy.txt
+t/07_files/dir/dummy.txt
 t/07_files/file.txt
 t/07_files/hidden.txt
-t/07_files/hidden/dammy.txt
+t/07_files/hidden/dummy.txt
 t/07_files/read_only.txt
-t/07_files/read_only/dammy.txt
+t/07_files/read_only/dummy.txt
 t/08_error.t
 t/09_normalize.t
 t/10_read.t
