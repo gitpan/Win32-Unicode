@@ -2,7 +2,7 @@ package Win32::Unicode::Console;
 
 use strict;
 use warnings;
-use 5.008001;
+use 5.008003;
 use utf8;
 use Carp ();
 use Win32::API ();
@@ -16,7 +16,7 @@ our @EXPORT = qw/printW printfW warnW sayW dieW/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 # GetStdHandle
 my $GetStdHandle = Win32::API->new('kernel32.dll',
@@ -61,10 +61,15 @@ my $ConsoleOut = sub {
 
 # print Unicode to Console
 sub printW {
-	if (_is_file_handle($_[0])) {
+	my $res = _is_file_handle($_[0]);
+	if ($res == 1) {
 		my $fh = shift;
-		print {$fh} join "", @_;
-		return 1;
+		Carp::croak "No comma allowed after filehandle" unless scalar @_;
+		return print {$fh} join "", @_;
+	}
+	elsif ($res == -1) {
+		shift;
+		Carp::croak "No comma allowed after filehandle" unless scalar @_;
 	}
 	
 	$ConsoleOut->(STD_OUTPUT_HANDLE, CONSOLE_OUTPUT_HANDLE, @_);
@@ -74,17 +79,24 @@ sub printW {
 
 # printf Unicode to Console
 sub printfW {
-	if (_is_file_handle($_[0])) {
+	my $res = _is_file_handle($_[0]);
+	if ($res == 1) {
 		my $fh = shift;
-		printW($fh, sprintf shift, @_)
+		Carp::croak "No comma allowed after filehandle" unless scalar @_;
+		return printW($fh, sprintf shift, @_);
+	}
+	elsif ($res == -1) {
+		shift;
+		Carp::croak "No comma allowed after filehandle" unless scalar @_;
 	}
 	
-	else {
-		printW(sprintf shift, @_);
-	}
+	printW(sprintf shift, @_);
 }
 
 sub _is_file_handle {
+	return 0 unless defined $_[0];
+	my $fileno = fileno $_[0];
+	return -1 if defined $fileno and $fileno == fileno select; # default out through.
 	ref $_[0] eq 'GLOB' and ref(*{$_[0]}{IO}) =~ /^IO::/ ? 1 : 0;
 }
 
@@ -108,6 +120,12 @@ sub dieW {
 sub _row_warn {
 	$ConsoleOut->(STD_ERROR_HANDLE, CONSOLE_ERROR_HANDLE, @_);
 }
+
+# Handle OO calls
+*IO::Handle::printW = \&printW unless defined &IO::Handle::printW;
+*IO::Handle::printfW = \&printfW unless defined &IO::Handle::printfW;
+*IO::Handle::sayW = \&sayW unless defined &IO::Handle::sayW;
+
 
 package Win32::Unicode::Console::Tie;
 

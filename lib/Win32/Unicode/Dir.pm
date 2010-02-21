@@ -2,7 +2,7 @@ package Win32::Unicode::Dir;
 
 use strict;
 use warnings;
-use 5.008001;
+use 5.008003;
 use Win32 ();
 use Win32::API ();
 use Carp ();
@@ -21,7 +21,7 @@ our @EXPORT    = qw/file_type file_size mkdirW rmdirW getcwdW chdirW findW findd
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 # global vars
 our $cwd;
@@ -131,9 +131,7 @@ sub close {
 	my $self = shift;
 	_croakW("Can't open directory handle") unless $self->{handle};
 	return 0 unless $FindClose->Call($self->{handle});
-	for my $key (qw/dir handle first FileInfo/) {
-		delete $self->{handle};
-	}
+	delete @$self{qw[dir handle first FileInfo]};
 	return 1;
 }
 
@@ -414,6 +412,11 @@ sub error {
 sub _croakW {
 	Win32::Unicode::Console::_row_warn(@_);
 	die Carp::shortmess();
+}
+
+sub DESTROY {
+	my $self = shift;
+	$self->close if defined $self->{handle};
 }
 
 1;

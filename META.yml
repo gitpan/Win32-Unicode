@@ -4,13 +4,13 @@ author:
   - 'Yuji Shimada <xaicron@cpan.org>'
 build_requires:
   ExtUtils::MakeMaker: 6.42
-  Test::Base: 0
+  Test::Exception: 0
   Test::More: 0
   Test::Output: 0
 configure_requires:
   ExtUtils::MakeMaker: 6.42
 distribution_type: module
-generated_by: 'Module::Install version 0.91'
+generated_by: 'Module::Install version 0.93'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -23,10 +23,10 @@ no_index:
     - xt
 requires:
   File::Spec::Functions: 0
-  Filter::Util::Call: 0
   Win32::API: 0
   Win32API::File: 0
-  perl: 5.8.1
+  perl: 5.8.3
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.11
+  repository: git://github.com/xaicron/p5-win32-unicode.git
+version: 0.12

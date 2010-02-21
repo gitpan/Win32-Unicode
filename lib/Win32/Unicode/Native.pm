@@ -2,10 +2,10 @@ package Win32::Unicode::Native;
 
 use strict;
 use warnings;
-use 5.008001;
+use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 use Win32::Unicode::Console ':all';
 use Win32::Unicode::File ':all';

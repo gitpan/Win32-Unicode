@@ -5,8 +5,8 @@ use warnings;
 use Carp ();
 use Exporter 'import';
 
-our $VERISON = '0.11';
-our @EXPORT = grep { Win32::Unicode::Constant->can($_) } grep { !/import|BEGIN|EXPORT/ } keys %Win32::Unicode::Constant::;
+our $VERISON = '0.12';
+our @EXPORT = grep { !/import|BEGIN|EXPORT/ && Win32::Unicode::Constant->can($_) } keys %Win32::Unicode::Constant::;
 
 sub NULL     () { "\x00" }
 sub NULLP    () { [] }

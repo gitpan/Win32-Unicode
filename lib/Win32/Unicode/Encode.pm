@@ -2,14 +2,14 @@ package Win32::Unicode::Encode;
 
 use strict;
 use warnings;
-use 5.008001;
+use 5.008003;
 use Encode ();
 use Exporter 'import';
 
 # export subs
 our @EXPORT = qw/utf16_to_utf8 utf8_to_utf16/;
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 # Unicode decoder
 my $utf16 = Encode::find_encoding 'utf16-le';
