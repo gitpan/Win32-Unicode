@@ -9,27 +9,27 @@ use Exporter 'import';
 # export subs
 our @EXPORT = qw/utf16_to_utf8 utf8_to_utf16/;
 
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 # Unicode decoder
 my $utf16 = Encode::find_encoding 'utf16-le';
 
 sub utf16_to_utf8 {
-	my $str = shift;
-	return unless defined $str;
-	return _denull($utf16->decode($str));
+    my $str = shift;
+    return unless defined $str;
+    return _denull($utf16->decode($str));
 }
 
 sub utf8_to_utf16 {
-	my $str = shift;
-	return unless defined $str;
-	return $utf16->encode($str);
+    my $str = shift;
+    return unless defined $str;
+    return $utf16->encode($str);
 }
 
 sub _denull {
-	my $str = shift;
-	$str =~ s/\x00//g;
-	return $str;
+    my $str = shift;
+    $str =~ s/\x00//g;
+    return $str;
 }
 
 1;

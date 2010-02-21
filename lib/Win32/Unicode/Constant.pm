@@ -5,7 +5,7 @@ use warnings;
 use Carp ();
 use Exporter 'import';
 
-our $VERISON = '0.12';
+our $VERISON = '0.13';
 our @EXPORT = grep { !/import|BEGIN|EXPORT/ && Win32::Unicode::Constant->can($_) } keys %Win32::Unicode::Constant::;
 
 sub NULL     () { "\x00" }
@@ -17,8 +17,6 @@ sub BUFF     () { NULL x (MAX_PATH + 1) }
 sub STD_INPUT_HANDLE      () { -10 }
 sub STD_OUTPUT_HANDLE     () { -11 }
 sub STD_ERROR_HANDLE      () { -12 }
-sub CONSOLE_OUTPUT_HANDLE () { 7 }
-sub CONSOLE_ERROR_HANDLE  () { 11 }
 sub MAX_BUFFER_SIZE       () { 20000 }
 
 # file attribute
