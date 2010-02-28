@@ -16,7 +16,7 @@ our @EXPORT = qw/printW printfW warnW sayW dieW/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 # GetStdHandle
 my $GetStdHandle = Win32::API->new('kernel32.dll',
@@ -102,9 +102,9 @@ sub printfW {
 
 sub _is_file_handle {
     return 0 unless defined $_[0];
-    my $fileno = fileno $_[0];
+    my $fileno = ref $_[0] eq 'GLOB' ? fileno $_[0] : undef;
     return -1 if defined $fileno and $fileno == fileno select; # default out through.
-    ref $_[0] eq 'GLOB' and ref(*{$_[0]}{IO}) =~ /^IO::/ ? 1 : 0;
+    defined $fileno and ref(*{$_[0]}{IO}) =~ /^IO::/ ? 1 : 0;
 }
 
 # say Unicode to Console
