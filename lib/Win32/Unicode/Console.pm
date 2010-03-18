@@ -16,7 +16,7 @@ our @EXPORT = qw/printW printfW warnW sayW dieW/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 # GetStdHandle
 my $GetStdHandle = Win32::API->new('kernel32.dll',
@@ -32,7 +32,7 @@ my $WriteConsole = Win32::API->new('kernel32.dll',
     'I',
 ) or die "WriteConsole: $^E";
 
-# backup default std handle
+# default std handle
 my $STD_HANDLE = {
     STD_OUTPUT_HANDLE, $GetStdHandle->Call(STD_OUTPUT_HANDLE),
     STD_ERROR_HANDLE,  $GetStdHandle->Call(STD_ERROR_HANDLE)
@@ -41,10 +41,11 @@ my $STD_HANDLE = {
 # ConsoleOut
 my $ConsoleOut = sub {
     my $out_handle = shift;
-    my $handle = $GetStdHandle->Call($out_handle);
+    my $handle = $STD_HANDLE->{$out_handle};
+    my $console_handle = shift;
     return 0 unless @_;
     
-    if ($handle != $STD_HANDLE->{$out_handle}) {
+    unless ($console_handle->{$handle}) {
         if (tied *STDOUT and ref tied *STDOUT eq 'Win32::Unicode::Console::Tie') {
             no warnings 'untie';
             untie *STDOUT;
@@ -71,15 +72,15 @@ sub printW {
     my $res = _is_file_handle($_[0]);
     if ($res == 1) {
         my $fh = shift;
-        Carp::croak "No comma allowed after filehandle" unless scalar @_;
+        _syntax_error() unless scalar @_;
         return print {$fh} join "", @_;
     }
     elsif ($res == -1) {
         shift;
-        Carp::croak "No comma allowed after filehandle" unless scalar @_;
+        _syntax_error() unless scalar @_;
     }
     
-    $ConsoleOut->(STD_OUTPUT_HANDLE, @_);
+    $ConsoleOut->(STD_OUTPUT_HANDLE, CONSOLE_OUTPUT_HANDLE, @_);
     
     return 1;
 }
@@ -89,12 +90,12 @@ sub printfW {
     my $res = _is_file_handle($_[0]);
     if ($res == 1) {
         my $fh = shift;
-        Carp::croak "No comma allowed after filehandle" unless scalar @_;
+        _syntax_error() unless scalar @_;
         return printW($fh, sprintf shift, @_);
     }
     elsif ($res == -1) {
         shift;
-        Carp::croak "No comma allowed after filehandle" unless scalar @_;
+        _syntax_error() unless scalar @_;
     }
     
     printW(sprintf shift, @_);
@@ -107,6 +108,11 @@ sub _is_file_handle {
     defined $fileno and ref(*{$_[0]}{IO}) =~ /^IO::/ ? 1 : 0;
 }
 
+sub _syntax_error {
+    local $Carp::CarpLevel = 1;
+    Carp::croak "No comma allowed after filehandle";
+}
+
 # say Unicode to Console
 sub sayW {
     printW(@_, "\n");
@@ -114,7 +120,7 @@ sub sayW {
 
 # warn Unicode to Console
 sub warnW {
-    $ConsoleOut->(STD_ERROR_HANDLE, Carp::shortmess(@_));
+    $ConsoleOut->(STD_ERROR_HANDLE, CONSOLE_ERROR_HANDLE, Carp::shortmess(@_));
     return 1;
 }
 
@@ -125,7 +131,7 @@ sub dieW {
 }
 
 sub _row_warn {
-    $ConsoleOut->(STD_ERROR_HANDLE, @_);
+    $ConsoleOut->(STD_ERROR_HANDLE, CONSOLE_ERROR_HANDLE, @_);
 }
 
 # Handle OO calls
