@@ -16,7 +16,7 @@ our @EXPORT = qw/printW printfW warnW sayW dieW/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 # GetStdHandle
 my $GetStdHandle = Win32::API->new('kernel32.dll',
@@ -46,6 +46,7 @@ my $ConsoleOut = sub {
     return 0 unless @_;
     
     unless ($console_handle->{$handle}) {
+        return warn @_ if $handle == $STD_HANDLE->{&STD_ERROR_HANDLE};
         if (tied *STDOUT and ref tied *STDOUT eq 'Win32::Unicode::Console::Tie') {
             no warnings 'untie';
             untie *STDOUT;
