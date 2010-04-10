@@ -21,7 +21,7 @@ our @EXPORT = qw/file_type file_size copyW moveW unlinkW touchW renameW/;
 our @EXPORT_OK = qw/filename_normalize slurp/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 my %FILE_TYPE_ATTRIBUTES = (
     s => FILE_ATTRIBUTE_SYSTEM,
@@ -35,18 +35,6 @@ my %FILE_TYPE_ATTRIBUTES = (
     o => FILE_ATTRIBUTE_OFFLINE,
     i => FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
     e => FILE_ATTRIBUTE_ENCRYPTED,
-);
-
-my $PathFileExists = Win32::API->new('shlwapi.dll',
-    'PathFileExistsW',
-    'P',
-    'I',
-);
-
-my $PathIsDirectory = Win32::API->new('shlwapi.dll',
-    'PathIsDirectoryW',
-    'P',
-    'I',
 );
 
 my $GetFileAttributes = Win32::API->new('kernel32.dll',
@@ -115,7 +103,8 @@ sub OPEN {
     my $self =shift;
     _croakW("Usage: $self->open('attrebute', 'filename')") unless @_ == 2;
     my $attr = shift;
-    my $file = utf8_to_utf16(catfile shift ) . NULL;
+    my $file = shift;
+    my $utf16_file = utf8_to_utf16(catfile $file) . NULL;
     
     if ($attr =~ s/(:.*)$//) {
         $self->BINMODE($1);
@@ -123,37 +112,37 @@ sub OPEN {
     
     my $handle = 
         $attr eq '<' || $attr eq 'r' || $attr eq 'rb' ? _create_file(
-            $file,
+            $utf16_file,
             GENERIC_READ,
             OPEN_EXISTING,
         ) :
         
         $attr eq '>' || $attr eq 'w' || $attr eq 'wb' ? _create_file(
-            $file,
+            $utf16_file,
             GENERIC_WRITE,
             CREATE_ALWAYS,
         ) :
         
         $attr eq '>>' || $attr eq 'a' ? _create_file(
-            $file,
+            $utf16_file,
             GENERIC_WRITE,
             OPEN_ALWAYS,
         ) :
         
         $attr eq '+<' || $attr eq 'r+' ? _create_file(
-            $file,
+            $utf16_file,
             GENERIC_READ | GENERIC_WRITE,
             OPEN_EXISTING,
         ) :
         
         $attr eq '+>' || $attr eq 'w+' ? _create_file(
-            $file,
+            $utf16_file,
             GENERIC_READ | GENERIC_WRITE,
             CREATE_ALWAYS,
         ) :
         
         $attr eq '+>>' || $attr eq 'a+' ? _create_file(
-            $file,
+            $utf16_file,
             GENERIC_READ | GENERIC_WRITE,
             OPEN_ALWAYS,
         ) :
@@ -168,7 +157,7 @@ sub OPEN {
     
     $self->SEEK(0, 2) if $attr eq '>>' || $attr eq 'a' || $attr eq '+>>' || $attr eq 'a+';
     
-    $self->{_file_name} = utf16_to_utf8($file);
+    $self->{_file_name} = $file;
     
     require Win32::Unicode::Dir;
     $self->{_file_path} = File::Spec->rel2abs($self->{_file_name}, Win32::Unicode::Dir::getcwdW());
@@ -406,9 +395,10 @@ sub file_type {
     my $file = catfile shift;
     
     my $get_attr = _get_file_type($file);
+    return unless defined $get_attr;
     for (split //, $attr) {
         if ($_ eq 'f') {
-            return 0 unless _is_file($file);
+            return if $get_attr & $FILE_TYPE_ATTRIBUTES{d};
             next;
         }
         
@@ -416,7 +406,7 @@ sub file_type {
             Carp::carp "unkown attribute '$_'";
             next;
         }
-        return 0 unless $get_attr & $FILE_TYPE_ATTRIBUTES{$_};
+        return unless $get_attr & $FILE_TYPE_ATTRIBUTES{$_};
     }
     return 1;
 }
@@ -494,8 +484,8 @@ sub moveW {
     my $over = shift || 0;
     
     unless ($MoveFile->Call(utf8_to_utf16($from) . NULL, utf8_to_utf16($to) . NULL)) {
-        return 0 unless copyW($from, $to, $over);
-        return 0 unless unlinkW($from);
+        return unless copyW($from, $to, $over);
+        return unless unlinkW($from);
     };
     
     return 1;
@@ -545,28 +535,12 @@ sub error {
 
 sub _get_file_type {
     my $file = shift;
-    my $buff = BUFF;
     $file = utf8_to_utf16($file) . NULL;
     my $result = $GetFileAttributes->Call($file);
-    if ($result == INVALID_VALUE) {
-        return 0;
+    if (defined $result && $result == INVALID_VALUE) {
+        return;
     }
     return $result;
-}
-
-sub _is_file {
-    my $file = shift;
-    my $tmp_file = utf8_to_utf16($file) . NULL;
-    if ($PathFileExists->Call($tmp_file)) {
-        return 1 unless _is_dir($file);
-    };
-    return 0
-}
-
-sub _is_dir {
-    my $file = shift;
-    $file = utf8_to_utf16($file) . NULL;
-    return $PathIsDirectory->Call($file);
 }
 
 sub _croakW {
