@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 use utf8;
-use Test::More tests => 15;
+use Test::More tests => 14;
 use Test::Exception;
 use File::Temp qw/tempdir tempfile/;
 use Win32::Unicode::File;
@@ -14,26 +14,22 @@ isa_ok $wfile, 'Win32::Unicode::File';
 
 # OO test
 {
-	ok $wfile->open(w => $write_file);
-	is $wfile->file_name, $write_file;
-	ok $wfile->binmode(':utf8');
-	ok $wfile->write('0123456789');
-	ok $wfile->seek(0, 2);
-	is $wfile->tell, 10;
-	ok $wfile->close;
+    ok $wfile->open(w => $write_file);
+    ok $wfile->binmode(':utf8');
+    ok $wfile->write('0123456789');
+    ok $wfile->seek(0, 2);
+    is $wfile->tell, 10;
+    ok $wfile->close;
 }
 
 # tie test
 {
-	ok open $wfile, '<', $write_file;
-	ok binmode $wfile, ':utf8';
-	TODO: {
-		local $TODO = 'todo';
-		ok print $wfile '0123456789';
-	};
-	ok seek($wfile, 0, 2);
-	is tell $wfile, 10;
-	ok close $wfile;
+    ok open $wfile, '>', $write_file;
+    ok binmode $wfile, ':utf8';
+    ok print $wfile '0123456789';
+    ok seek($wfile, 0, 2);
+    is tell $wfile, 10;
+    ok close $wfile;
 };
 
 local $^W; # -w switch off ( Win32::API::Struct evil warnings stop!! )

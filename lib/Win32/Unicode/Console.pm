@@ -8,7 +8,8 @@ use Carp ();
 use Win32::API ();
 use Exporter 'import';
 
-use Win32::Unicode::Encode;
+use Win32::Unicode::Util;
+use Win32::Unicode::Define;
 use Win32::Unicode::Constant;
 
 # export subs
@@ -16,26 +17,12 @@ our @EXPORT = qw/printW printfW warnW sayW dieW/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.18';
-
-# GetStdHandle
-my $GetStdHandle = Win32::API->new('kernel32.dll',
-    'GetStdHandle',
-    'N',
-    'N',
-) or die "GetStdHandle: $^E";
-
-# WriteConsole
-my $WriteConsole = Win32::API->new('kernel32.dll',
-    'WriteConsoleW',
-    [qw(N P N N P)],
-    'I',
-) or die "WriteConsole: $^E";
+our $VERSION = '0.19';
 
 # default std handle
 my $STD_HANDLE = {
-    STD_OUTPUT_HANDLE, $GetStdHandle->Call(STD_OUTPUT_HANDLE),
-    STD_ERROR_HANDLE,  $GetStdHandle->Call(STD_ERROR_HANDLE)
+    STD_OUTPUT_HANDLE, GetStdHandle->Call(STD_OUTPUT_HANDLE),
+    STD_ERROR_HANDLE,  GetStdHandle->Call(STD_ERROR_HANDLE)
 };
 
 # ConsoleOut
@@ -43,7 +30,7 @@ sub _ConsoleOut {
     my $out_handle = shift;
     my $handle = $STD_HANDLE->{$out_handle};
     my $console_handle = shift;
-    return 0 unless @_;
+    return unless @_;
     
     unless ($console_handle->{$handle}) {
         return warn @_ if $handle == $STD_HANDLE->{&STD_ERROR_HANDLE};
@@ -65,7 +52,7 @@ sub _ConsoleOut {
         substr($str, 0, MAX_BUFFER_SIZE) = '';
         
         my $buff = 0;
-        $WriteConsole->Call($handle, utf8_to_utf16($tmp_str), length($tmp_str), $buff, NULL);
+        WriteConsole->Call($handle, utf8_to_utf16($tmp_str), length($tmp_str), $buff, NULL);
     }
 };
 

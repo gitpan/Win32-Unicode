@@ -9,34 +9,27 @@ use Exporter 'import';
 
 our $VERSION = '0.18';
 
-use Win32::Unicode::Console;
+use Errno qw/:POSIX/;
+
 use Win32::Unicode::Constant;
-use Win32::Unicode::Encode;
+use Win32::Unicode::Util;
+use Win32::Unicode::Define;
 
 # export subs
 our @EXPORT    = qw/errorW/;
-our @EXPORT_OK = qw//;
+our @EXPORT_OK = qw/error/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-my $GetLastError = Win32::API->new('kernel32.dll',
-    'GetLastError',
-    '',
-    'I',
-) or die $^E;
+my %ERROR_TABLE = (
+    &ERROR_FILE_EXISTS => EEXIST,
+);
 
-my $FormatMessage = Win32::API->new('kernel32.dll', 
-    'FormatMessageW',
-    [qw/I P I I P I P/],
-    'I',
-) or die $^E;
-
-sub error {
-    shift;
+sub errorW {
     my $buff = BUFF;
-    my $result = $FormatMessage->Call(
+    my $result = FormatMessage->Call(
         FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL,
-        $GetLastError->Call(),
+        GetLastError->Call,
         LANG_USER_DEFAULT,
         $buff,
         length($buff),
@@ -47,15 +40,20 @@ sub error {
     return utf16_to_utf8($buff);
 }
 
-sub errorW {
-    return __PACKAGE__->error;
+sub _set_errno {
+    my $errno = GetLastError->Call;
+    $! = $ERROR_TABLE{$errno} || $errno;
+    return;
 }
+
+*error = *errorW;
 
 1;
 __END__
 =head1 NAME
 
 Win32::Unicode::Error.pm - return error message.
+
 
 =head1 SYNOPSIS
 
@@ -68,13 +66,9 @@ Win32::Unicode::Error.pm - return error message.
 
 Wn32::Unicode::Error is retrun to Win32API error message.
 
-=head1 METHODS
+=head1 FUNCTIONS
 
 =over
-
-=item error
-
-OO.
 
 =item errorW
 

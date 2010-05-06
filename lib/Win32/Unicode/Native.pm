@@ -5,11 +5,12 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 
 use Win32::Unicode::Console ':all';
-use Win32::Unicode::File ':all';
-use Win32::Unicode::Dir ':all';
+use Win32::Unicode::File    ':all';
+use Win32::Unicode::Dir     ':all';
+use Win32::Unicode::Process ':all';
 use Win32::Unicode::Error ();
 
 our @EXPORT = qw{
@@ -22,6 +23,8 @@ our @EXPORT = qw{
     opendir
     closedir
     readdir
+    file_list
+    dir_list
 };
 
 my $sub_export = sub {
@@ -51,6 +54,7 @@ $sub_export->(qw{
     copyW
     moveW
     touchW
+    statW
 });
 
 sub open {
@@ -105,6 +109,12 @@ sub readdir {
 
 # Win32::Unicode::Error
 *error = \&Win32::Unicode::Error::errorW;
+
+# Win32::Unicode::Process
+$sub_export->(qw{
+    systemW
+    execW
+});
 
 1;
 __END__
