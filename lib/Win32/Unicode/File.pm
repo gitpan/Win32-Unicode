@@ -4,7 +4,6 @@ use strict;
 use warnings;
 use utf8;
 use 5.008003;
-use Win32::API ();
 use Win32API::File ();
 use Carp ();
 use File::Basename qw/basename/;
@@ -15,14 +14,14 @@ use base qw/Tie::Handle/;
 use Win32::Unicode::Util;
 use Win32::Unicode::Error;
 use Win32::Unicode::Constant;
-use Win32::Unicode::Define;
 use Win32::Unicode::Console;
+use Win32::Unicode::XS;
 
 our @EXPORT = qw/file_type file_size copyW moveW unlinkW touchW renameW statW/;
 our @EXPORT_OK = qw/filename_normalize slurp/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.19';
+our $VERSION = '0.20';
 
 my %FILE_TYPE_ATTRIBUTES = (
     s => FILE_ATTRIBUTE_SYSTEM,
@@ -289,6 +288,7 @@ sub SEEK {
     my $low = shift;
     my $whence = shift;
     
+    my $result;
     if (is64int($low)) {
         my ($pos_low, $pos_high);
         if ($low > 0) {
@@ -299,13 +299,14 @@ sub SEEK {
             $pos_low  = $low % _S32INT;
             $pos_high = $low / _S32INT;
         }
-        my $res_low = Win32API::File::SetFilePointer($self->win32_handle, $pos_low, $pos_high, $whence);
-        return to64int($pos_high, $pos_low);
+        my $st = set_file_pointer($self->win32_handle, $pos_low, $pos_high, $whence) or return Win32::Unicode::Error::_set_errno;
+        return $st->{high} ? to64int($st->{high}, $st->{low}) : $st->{low};
     }
     else {
         my $high = 0;
         $high = ~0 if $low < 0;
-        return Win32API::File::SetFilePointer($self->win32_handle, $low, $high, $whence);
+        my $st = set_file_pointer($self->win32_handle, $low, $high, $whence) or return Win32::Unicode::Error::_set_errno;
+        return $st->{high} ? to64int($st->{high}, $st->{low}) : $st->{low};
     }
 }
 
@@ -329,9 +330,8 @@ sub slurp {
     my $self = shift;
     $self = tied(*$self);
     
-    my $size = Win32API::File::getFileSize($self->win32_handle) + 0;
     $self->SEEK(0, 0);
-    $self->READ(my $buff, $size);
+    $self->READ(my $buff, $self->file_size);
     return $buff;
 }
 
@@ -382,10 +382,9 @@ sub statW {
     _croakW('Usage: statW(filename)') unless defined $file;
     my $wantarray = wantarray;
     
-    my $fi = Win32::API::Struct->new('BY_HANDLE_FILE_INFORMATION');
-    
+    my $fi;
     if (ref $file eq __PACKAGE__) {
-        GetFileInformationByHandle->Call(tied(*$file)->win32_handle, $fi) or return Win32::Unicode::Error::_set_errno;
+        $fi = get_file_information_by_handle(tied(*$file)->win32_handle) or return Win32::Unicode::Error::_set_errno;
     }
     else {
         $file = cygpathw($file) or return if CYGWIN;
@@ -403,7 +402,7 @@ sub statW {
         );
         return Win32::Unicode::Error::_set_errno if $handle == INVALID_VALUE;
         
-        GetFileInformationByHandle->Call($handle, $fi) or return Win32::Unicode::Error::_set_errno;
+        $fi = get_file_information_by_handle($handle) or return Win32::Unicode::Error::_set_errno;
         Win32API::File::CloseHandle($handle) or return Win32::Unicode::Error::_set_errno;
     }
     
@@ -411,7 +410,14 @@ sub statW {
     
     # uid guid (really?)
     $result->{uid} = 0;
-    $result->{gud} = 0;
+    $result->{gid} = 0;
+    
+    # inode (really?)
+    $result->{ino} = 0;
+    
+    # block (really?)
+    $result->{blksize} = '';
+    $result->{blocks}  = '';
     
     # size
     $result->{size} = $fi->{size_high} ? to64int($fi->{size_high}, $fi->{size_low}) : $fi->{size_low};
@@ -419,7 +425,7 @@ sub statW {
     # ctime atime mtime
     for my $key (qw/ctime atime mtime/) {
         use bigint;
-        my $etime = ($fi->{$key}{dwHighDateTime} << 32) + $fi->{$key}{dwLowDateTime};
+        my $etime = ($fi->{$key}{high} << 32) + $fi->{$key}{low};
         $result->{$key} = ($etime - 116444736000000000) / 10000000; # to epoch
     }
     
@@ -464,17 +470,13 @@ sub file_type {
     return 1;
 }
 
-my $FILE_SIZE_LARGE_INTEGER = Win32::API::Struct->new('LARGE_INTEGER');
-
 sub file_size {
     my $file = shift;
     _croakW('Usage: file_size(filename)') unless defined $file;
     
-    my $st = $FILE_SIZE_LARGE_INTEGER;
-    
     if (ref $file eq __PACKAGE__) {
         my $self = "$file" =~ /GLOB/ ? tied *$file : $file;
-        GetFileSizeEx->Call($self->win32_handle, $st) or return Win32::Unicode::Error::_set_errno;
+        my $st = get_file_size($self->win32_handle) or return Win32::Unicode::Error::_set_errno;
         return $st->{high} ? to64int($st->{high}, $st->{low}) : $st->{low};
     }
     
@@ -494,7 +496,7 @@ sub file_size {
     );
     return Win32::Unicode::Error::_set_errno if $handle == INVALID_VALUE;
     
-    GetFileSizeEx->Call($handle, $st) or return Win32::Unicode::Error::_set_errno;
+    my $st = get_file_size($handle) or return Win32::Unicode::Error::_set_errno;
     Win32API::File::CloseHandle($handle) or return Win32::Unicode::Error::_set_errno;
     
     return $st->{high} ? to64int($st->{high}, $st->{low}) : $st->{low};
@@ -538,7 +540,7 @@ sub copyW {
     $from = utf8_to_utf16($from) . NULL;
     $to   = utf8_to_utf16($to) . NULL;
     
-    return CopyFile->Call($from, $to, !$over) ? 1 : Win32::Unicode::Error::_set_errno;
+    return copy_file($from, $to, !$over) ? 1 : Win32::Unicode::Error::_set_errno;
 }
 
 # move file
@@ -547,7 +549,7 @@ sub moveW {
     my ($from, $to) = _file_name_validete(shift, shift);
     my $over = shift || 0;
     
-    unless (MoveFile->Call(utf8_to_utf16($from) . NULL, utf8_to_utf16($to) . NULL)) {
+    unless (move_file(utf8_to_utf16($from) . NULL, utf8_to_utf16($to) . NULL)) {
         return unless copyW($from, $to, $over);
         return unless unlinkW($from);
     };
@@ -600,7 +602,7 @@ sub error {
 sub _get_file_type {
     my $file = shift;
     $file = utf8_to_utf16($file) . NULL;
-    my $result = GetFileAttributes->Call($file);
+    my $result = get_file_attributes($file);
     if (defined $result && $result == INVALID_VALUE) {
         return Win32::Unicode::Error::_set_errno;
     }
@@ -828,7 +830,6 @@ Yuji Shimada E<lt>xaicron@cpan.orgE<gt>
 =head1 SEE ALSO
 
 L<Win32>
-L<Win32::API>
 L<Win32API::File>
 L<Win32::Unicode>
 L<Win32::Unicode::File>

@@ -4,7 +4,6 @@ use strict;
 use warnings;
 use 5.008003;
 use Win32 ();
-use Win32::API ();
 use Carp ();
 use File::Basename qw/basename dirname/;
 use Exporter 'import';
@@ -12,16 +11,16 @@ use Exporter 'import';
 use Win32::Unicode::Util;
 use Win32::Unicode::Error;
 use Win32::Unicode::Constant;
-use Win32::Unicode::Define;
 use Win32::Unicode::File;
 use Win32::Unicode::Console;
+use Win32::Unicode::XS;
 
 # export subs
 our @EXPORT    = qw/file_type file_size mkdirW rmdirW getcwdW chdirW findW finddepthW mkpathW rmtreeW mvtreeW cptreeW dir_size file_list dir_list/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.19';
+our $VERSION = '0.20';
 
 # global vars
 our $cwd;
@@ -39,17 +38,15 @@ sub open {
     my $dir = shift;
     _croakW('Usage $obj->open(dirname)') unless defined $dir;
     
-    $self->{FileInfo} = Win32::API::Struct->new('WIN32_FIND_DATAW');
-    
     $dir = cygpathw($dir) or return if CYGWIN;
     
     $self->{dir} = catfile $dir, '*';
     $dir = utf8_to_utf16($self->{dir}) . NULL;
     
-    $self->{handle} = FindFirstFile->Call($dir, $self->{FileInfo});
+    $self->find_first_file($dir);
     return Win32::Unicode::Error::_set_errno if $self->{handle} == INVALID_HANDLE_VALUE;
     
-    $self->{first} = $self->_cFileName;
+    $self->{first} = utf16_to_utf8($self->{first});
     
     return $self;
 }
@@ -58,7 +55,7 @@ sub open {
 sub close {
     my $self = shift;
     _croakW("Can't open directory handle") unless $self->{handle};
-    return Win32::Unicode::Error::_set_errno unless FindClose->Call($self->{handle});
+    return Win32::Unicode::Error::_set_errno unless $self->find_close;
     delete @$self{qw[dir handle first FileInfo]};
     return 1;
 }
@@ -80,36 +77,25 @@ sub fetch {
         my @files;
         
         push @files, $first if $first;
-        while (FindNextFile->Call($self->{handle} ,$self->{FileInfo})) {
-            push @files, $self->_cFileName;
+        while (defined(my $file = $self->find_next_file)) {
+            push @files, utf16_to_utf8($file);
         }
         
         return @files;
     }
     else {
         return $first if $first;
-        return Win32::Unicode::Error::_set_errno unless FindNextFile->Call($self->{handle} ,$self->{FileInfo});
-        return $self->_cFileName;
+        my $file = $self->find_next_file;
+        return Win32::Unicode::Error::_set_errno unless defined $file;
+        return utf16_to_utf8($file);
     }
 }
 
 *read = *readdir = \&fetch;
 
-sub _cFileName {
-    my $self = shift;
-    my $cFileName = do {
-        use bytes;
-        unpack "x44A520", $self->{FileInfo}->{buffer};
-    };
-    delete $self->{FileInfo}->{cFileName};
-    return utf16_to_utf8($cFileName . NULL);
-};
-
 # like use Cwd qw/getcwd/;
 sub getcwdW {
-    my $buff = BUFF;
-    my $length = GetCurrentDirectory->Call(MAX_PATH + 1, $buff);
-    return utf16_to_utf8(substr $buff, 0, $length * 2);
+    utf16_to_utf8 get_current_directory();
 }
 
 # like CORE::chdir
@@ -118,9 +104,9 @@ sub chdirW {
     my $retry = shift || 0;
     _croakW('Usage: chdirW(dirname)') unless defined $set_dir;
     $set_dir = cygpathw($set_dir) or return if CYGWIN;
-    $set_dir = utf8_to_utf16(catfile $set_dir) . NULL;
-    return Win32::Unicode::Error::_set_errno unless SetCurrentDirectory->Call($set_dir);
-    return chdirW(utf16_to_utf8($set_dir), ++$retry) if CYGWIN && !$retry; # bug ?
+    $set_dir = catfile($set_dir);
+    return Win32::Unicode::Error::_set_errno unless set_current_directory(utf8_to_utf16($set_dir) . NULL);
+    return chdirW($set_dir, ++$retry) if CYGWIN && !$retry; # bug ?
     return 1;
 }
 
@@ -136,7 +122,7 @@ sub rmdirW {
     my $dir = defined $_[0] ? $_[0] : $_;
     $dir = cygpathw($dir) or return if CYGWIN;
     $dir = utf8_to_utf16(catfile $dir) . NULL;
-    return RemoveDirectory->Call($dir) ? 1 : Win32::Unicode::Error::_set_errno;
+    return remove_directory($dir) ? 1 : Win32::Unicode::Error::_set_errno;
 }
 
 # like File::Path::rmtree
@@ -354,10 +340,7 @@ sub file_list {
     _croakW('Usage: file_list(dirname)') unless defined $dir;
     
     my $wdir = __PACKAGE__->new->open($dir) or return;
-    my @files = grep { !/^\.{1,2}$/ && file_type f => $_ } $wdir->fetch;
-    $wdir->close;
-    
-    return @files;
+    return grep { !/^\.{1,2}$/ && file_type f => $_ } $wdir->fetch;
 }
 
 sub dir_list {
@@ -365,10 +348,7 @@ sub dir_list {
     _croakW('Usage: dir_list(dirname)') unless defined $dir;
     
     my $wdir = __PACKAGE__->new->open($dir) or return;
-    my @dirs = grep { !/^\.{1,2}$/ && file_type d => $_ } $wdir->fetch;
-    $wdir->close;
-    
-    return @dirs;
+    return grep { !/^\.{1,2}$/ && file_type d => $_ } $wdir->fetch;
 }
 
 # return error message
@@ -567,7 +547,6 @@ Yuji Shimada E<lt>xaicron@cpan.orgE<gt>
 =head1 SEE ALSO
 
 L<Win32>
-L<Win32::API>
 L<Win32API::File>
 L<Win32::Unicode>
 L<Win32::Unicode::File>

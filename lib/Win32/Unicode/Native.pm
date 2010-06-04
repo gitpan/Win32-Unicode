@@ -5,13 +5,46 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.19';
+our $VERSION = '0.20';
 
 use Win32::Unicode::Console ':all';
 use Win32::Unicode::File    ':all';
 use Win32::Unicode::Dir     ':all';
 use Win32::Unicode::Process ':all';
 use Win32::Unicode::Error ();
+use Win32::Unicode::Constant qw/CYGWIN/;
+use Win32::Unicode::Util;
+use Win32::Unicode::XS;
+
+do {
+    @main::ARGV = ();
+    my $enc = Encode::find_encoding(CYGWIN ? 'utf8' : 'cp932');
+    my $script = $enc->decode($0);
+    my @args = @{parse_argv()};
+    my $flag = 0;
+    while (@args) {
+        my $argv = utf16_to_utf8 shift @args;
+        unless ($flag) {
+            if ($script eq '-e') {
+                if ($argv =~ /^\-[a-z0-9]*e$/i) {
+                    $flag++;
+                    shift @args; # skip next -e
+                }
+            }
+            elsif ($script eq '-') {
+                $flag++ if $argv eq '-';
+            }
+            elsif (rel2abs($script) eq rel2abs($argv)) {
+                $0 = $script;
+                $flag++;
+            }
+            next;
+        }
+        push @main::ARGV, $argv;
+    }
+    
+    sub __FILE__ () { $script }
+};
 
 our @EXPORT = qw{
     error
@@ -25,6 +58,7 @@ our @EXPORT = qw{
     readdir
     file_list
     dir_list
+    __FILE__
 };
 
 my $sub_export = sub {

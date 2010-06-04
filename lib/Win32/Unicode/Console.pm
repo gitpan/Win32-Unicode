@@ -5,24 +5,23 @@ use warnings;
 use 5.008003;
 use utf8;
 use Carp ();
-use Win32::API ();
 use Exporter 'import';
 
 use Win32::Unicode::Util;
-use Win32::Unicode::Define;
 use Win32::Unicode::Constant;
+use Win32::Unicode::XS;
 
 # export subs
 our @EXPORT = qw/printW printfW warnW sayW dieW/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.19';
+our $VERSION = '0.20';
 
 # default std handle
 my $STD_HANDLE = {
-    STD_OUTPUT_HANDLE, GetStdHandle->Call(STD_OUTPUT_HANDLE),
-    STD_ERROR_HANDLE,  GetStdHandle->Call(STD_ERROR_HANDLE)
+    STD_OUTPUT_HANDLE, get_std_handle(STD_OUTPUT_HANDLE),
+    STD_ERROR_HANDLE,  get_std_handle(STD_ERROR_HANDLE)
 };
 
 # ConsoleOut
@@ -47,12 +46,12 @@ sub _ConsoleOut {
     my $separator = defined $\ ? $\ : '';
     my $str = join '', @_, $separator;
     
-    while ($str) {
+    while (length $str) {
         my $tmp_str = substr($str, 0, MAX_BUFFER_SIZE);
         substr($str, 0, MAX_BUFFER_SIZE) = '';
         
         my $buff = 0;
-        WriteConsole->Call($handle, utf8_to_utf16($tmp_str), length($tmp_str), $buff, NULL);
+        write_console($handle, utf8_to_utf16($tmp_str) . NULL);
     }
 };
 
@@ -109,14 +108,31 @@ sub sayW {
 
 # warn Unicode to Console
 sub warnW {
-    _ConsoleOut(STD_ERROR_HANDLE, CONSOLE_ERROR_HANDLE, Carp::shortmess(@_));
+    my $str = join q{}, @_;
+    $str .= $str =~ s/\n$// ? "\n" : Carp::shortmess('');
+    
+    if ($SIG{__WARN__} && ref $SIG{__WARN__} eq 'CODE') {
+        return $SIG{__WARN__}->($str);
+    }
+    
+    _row_warn($str);
     return 1;
 }
 
 # die Unicode to Console
 sub dieW {
-    _row_warn(@_);
-    Carp::croak '';
+    my $str = join q{}, @_;
+    $str .= $str =~ s/\n$// ? "\n" : Carp::shortmess('');
+    
+    if ($SIG{__DIE__} && ref $SIG{__DIE__} eq 'CODE') {
+        $SIG{__DIE__}->($str);
+    }
+    local $SIG{__DIE__};
+    
+    $str =~ s/\n$//;
+    _row_warn($str);
+    CORE::die("\n");
+    return;
 }
 
 sub _row_warn {
@@ -150,6 +166,8 @@ sub PRINTF {
 sub BINMODE {
     # TODO...?
 }
+
+sub FILENO {}
 
 1;
 __END__
@@ -216,9 +234,5 @@ Like die.
 =head1 AUTHOR
 
 Yuji Shimada E<lt>xaicron@cpan.orgE<gt>
-
-=head1 SEE ALSO
-
-L<Win32::API>
 
 =cut

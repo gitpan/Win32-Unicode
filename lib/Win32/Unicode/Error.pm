@@ -3,17 +3,16 @@ package Win32::Unicode::Error;
 use strict;
 use warnings;
 use 5.008003;
-use Win32::API ();
 use Carp ();
 use Exporter 'import';
 
-our $VERSION = '0.18';
+our $VERSION = '0.20';
 
 use Errno qw/:POSIX/;
 
 use Win32::Unicode::Constant;
 use Win32::Unicode::Util;
-use Win32::Unicode::Define;
+use Win32::Unicode::XS;
 
 # export subs
 our @EXPORT    = qw/errorW/;
@@ -25,23 +24,12 @@ my %ERROR_TABLE = (
 );
 
 sub errorW {
-    my $buff = BUFF;
-    my $result = FormatMessage->Call(
-        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL,
-        GetLastError->Call,
-        LANG_USER_DEFAULT,
-        $buff,
-        length($buff),
-        NULL,
-    );
-    
-    $buff = unpack "A520", $buff;
+    my $buff = foramt_message();
     return utf16_to_utf8($buff);
 }
 
 sub _set_errno {
-    my $errno = GetLastError->Call;
+    my $errno = get_last_error();
     $! = $ERROR_TABLE{$errno} || $errno;
     return;
 }
