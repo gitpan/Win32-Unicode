@@ -19,7 +19,7 @@ my(@XSStack);	# Stack of conditionals and INCLUDEs
 my($XSS_work_idx, $cpp_next_tmp);
 
 use vars qw($VERSION);
-$VERSION = '2.2205';
+$VERSION = '2.2206';
 $VERSION = eval $VERSION if $VERSION =~ /_/;
 
 use vars qw(%input_expr %output_expr $ProtoUsed @InitFileCode $FH $proto_re $Overload $errors $Fallback
@@ -75,7 +75,7 @@ sub process_file {
   ($XSS_work_idx, $cpp_next_tmp) = (0, "XSubPPtmpAAAA");
   @InitFileCode = ();
   $FH = Symbol::gensym();
-  $proto_re = "[" . quotemeta('\$%&*@;[]') . "]" ;
+  $proto_re = "[" . quotemeta('\$%&*@;[]_') . "]" ;
   $Overload = 0;
   $errors = 0;
   $Fallback = '&PL_sv_undef';
@@ -1489,6 +1489,7 @@ sub PROTOTYPES_handler ()
 
 sub PushXSStack
   {
+    my %args = @_;
     # Save the current file context.
     push(@XSStack, {
 		    type            => 'file',
@@ -1499,6 +1500,8 @@ sub PushXSStack
 		    Filename        => $filename,
 		    Filepathname    => $filepathname,
 		    Handle          => $FH,
+                    IsPipe          => scalar($filename =~ /\|\s*$/),
+                    %args,
 		   }) ;
 
   }
@@ -1544,7 +1547,7 @@ sub INCLUDE_handler ()
 EOF
 
     $filename = $_ ;
-    $filepathname = "$dir/$filename";
+    $filepathname = File::Spec->catfile($dir, $filename);
 
     # Prime the pump by reading the first
     # non-blank line
@@ -1558,11 +1561,23 @@ EOF
     $lastline_no = $. ;
   }
 
+sub QuoteArgs {
+    my $cmd = shift;
+    my @args = split /\s+/, $cmd;
+    $cmd = shift @args;
+    for (@args) {
+       $_ = q(").$_.q(") if !/^\"/ && length($_) > 0;
+    }
+    return join (' ', ($cmd, @args));
+  }
+
 sub INCLUDE_COMMAND_handler ()
   {
     # the rest of the current line should contain a valid command
 
     TrimWhitespace($_) ;
+
+    $_ = QuoteArgs($_) if $^O eq 'VMS';
 
     death("INCLUDE_COMMAND: command missing")
       unless $_ ;
@@ -1570,7 +1585,7 @@ sub INCLUDE_COMMAND_handler ()
     death("INCLUDE_COMMAND: pipes are illegal")
       if /^\s*\|/ or /\|\s*$/ ;
 
-    PushXSStack();
+    PushXSStack( IsPipe => 1 );
 
     $FH = Symbol::gensym();
 
@@ -1589,7 +1604,8 @@ sub INCLUDE_COMMAND_handler ()
 EOF
 
     $filename = $_ ;
-    $filepathname = "$dir/$filename";
+    $filepathname = $filename;
+    $filepathname =~ s/\"/\\"/g;
 
     # Prime the pump by reading the first
     # non-blank line
@@ -1609,7 +1625,7 @@ sub PopFile()
 
     my $data     = pop @XSStack ;
     my $ThisFile = $filename ;
-    my $isPipe   = ($filename =~ /\|\s*$/) ;
+    my $isPipe   = $data->{IsPipe};
 
     -- $IncludedFiles{$filename}
       unless $isPipe ;
@@ -2023,4 +2039,4 @@ sub end_marker {
 1;
 __END__
 
-#line 2175
+#line 2191
