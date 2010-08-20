@@ -20,11 +20,12 @@ our @EXPORT    = qw/file_type file_size mkdirW rmdirW getcwdW chdirW findW findd
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.22';
+our $VERSION = '0.23';
 
 # global vars
 our $cwd;
 our $name;
+our $dir;
 our $skip_pattern = qr/\A(?:(?:\.{1,2})|(?:System Volume Information))\z/;
 
 sub new {
@@ -131,6 +132,7 @@ sub rmtreeW {
     my $stop = shift;
     _croakW('Usage: rmtreeW(dirname)') unless defined $dir;
     $dir = catfile $dir;
+    
     return unless file_type(d => $dir);
     my $code = sub {
         my $file = $_;
@@ -183,28 +185,26 @@ my $is_drive = qr/^[a-zA-Z]:/;
 my $in_dir   = qr#[\\/]$#;
 
 sub _cptree {
-    my $from = shift;
-    my $to = shift;
-    my $over = shift || 0;
-    my $bymove = shift || 0;
+    my $from         = shift;
+    my $to           = shift;
+    my $over         = shift || 0;
+    my $bymove       = shift || 0;
+    my $content_only = 0;
     
     _croakW("$from: no such directory") unless file_type d => $from;
     
-    $from = cygpathw($from) or return if CYGWIN;
+    $content_only = 1 if $from =~ $in_dir;
     $from = catfile $from;
-    $to = cygpathw($to) or return if CYGWIN;
     
     if ($to =~ $is_drive) {
-        $to = catfile $to, basename($from) if $to =~ $in_dir;
-        $to = catfile $to;
+        $to = catfile $to, !$content_only ? basename($from) : ();
     }
     else {
-        $to = catfile getcwdW(), $to, basename($from) if $to =~ $in_dir;
-        $to = catfile getcwdW(), $to;
+        $to = catfile getcwdW(), $to, !$content_only ? basename($from) : ();
     }
     
     unless (file_type d => $to) {
-        mkpathW $to or _croakW("$to " . errorW);
+        mkdirW $to or _croakW("$to: " . $!);
     }
     
     my $replace_from = quotemeta $from;
@@ -234,7 +234,7 @@ sub _cptree {
     };
     
     finddepthW($code, $from);
-    if ($bymove) {
+    if ($bymove && !$content_only) {
         return unless rmdirW $from;
     }
     return 1;
@@ -243,79 +243,117 @@ sub _cptree {
 # like File::Find::find
 sub findW {
     _croakW('Usage: findW(code_ref, dir)') unless @_ >= 2;
-    my $code = shift;
-    _find_wrap($code, 0, @_);
+    my $opts = shift;
+    _find_wrap($opts, 0, @_);
     return 1;
 }
 
 # like File::Find::finddepth
 sub finddepthW {
     _croakW('Usage: finddepthW(code_ref, dir)') unless @_ >= 2;
-    my $code = shift;
-    _find_wrap($code, 1, @_);
+    my $opts = shift;
+    _find_wrap($opts, 1, @_);
     return 1;
 }
 
 sub _find_wrap {
-    my $code = shift;
+    my $opts = shift;
     my $bydepth = shift;
-    for my $arg (@_) {
-        my $dir = $arg;
-        $dir = cygpathw($dir) or return if CYGWIN;
-        $dir = catfile $dir;
-       _croakW("$dir: no such directory") unless file_type(d => $dir);
+    my @args = @_;
+    
+    if (ref $opts eq 'CODE') {
+        $opts = { wanted => $opts };
+    }
+    elsif (ref $opts ne 'HASH') {
+        _croakW('first args must be CODEREF or HASHREF specified');
+    }
+    
+    if (ref $opts->{wanted} ne 'CODE') {
+        _croakW('wanted must be CODEREF specified');
+    }
+    if (exists $opts->{preprocess} && ref $opts->{preprocess} ne 'CODE') {
+        _croakW('preprocess must be CODEREF specified');
+    }
+    if (exists $opts->{postprocess} && ref $opts->{postprocess} ne 'CODE') {
+        _croakW('postprocess must be CODEREF specified');
+    }
+    
+    $opts->{bydepth} ||= $bydepth;
+    
+    local ($dir, $name, $cwd);
+    
+    for my $arg (@args) {
+        $arg = catfile $arg;
+       _croakW("$arg: no such directory") unless file_type(d => $arg);
         
         my $current = getcwdW;
-        _find($code, $dir, $bydepth);
-        chdirW($current);
-        $name = $cwd = undef;
+        _find($opts, $arg);
+        
+        $opts->{postprocess}->() if $opts->{postprocess};
+        chdirW($current) unless $opts->{no_chdir};
+        
+        $name = $cwd = $dir = undef;
     }
 }
 
 sub _find {
-    my $code = shift;
-    my $dir = shift;
-    my $bydepth = shift;
+    my $opts    = shift;
+    my $new_dir = shift;
     
-    chdirW $dir or _croakW("$dir ", errorW);
+    chdirW $new_dir or _croakW("$new_dir ", errorW) unless $opts->{no_chdir};
     
-    $cwd = $cwd ? catfile($cwd, $dir) : $dir;
+    $dir = $cwd = $cwd ? $opts->{no_chdir} ? $new_dir : catfile($cwd, $new_dir) : $new_dir; # $Win32::Unicode::Dir::(dir|cwd)
     
     my $wdir = Win32::Unicode::Dir->new;
-    $wdir->open('.') or _croakW("can't open directory ", errorW);
+    if ($opts->{no_chdir}) {
+        $wdir->open($dir) or _croakW("can't open directory: $dir", errorW);
+    }
+    else {
+        $wdir->open('.') or _croakW("can't open directory: $dir", errorW);
+    }
+    my @list = $wdir->fetch;
+    $wdir->close or _croakW("can't close directory ", errorW);
     
-    for my $cur ($wdir->fetch) {
+    @list = $opts->{preprocess}->(@list) if $opts->{preprocess};
+    
+    for my $cur (@list) {
         next if $cur =~ $skip_pattern;
         
-        unless ($bydepth) {
-            $::_ = $cur;
-            $name = catfile $cwd, $cur;
-            $code->({
+        $cur = catfile($cwd, $cur) if $opts->{no_chdir};
+        
+        unless ($opts->{bydepth}) {
+            $::_ = $cur; # $_
+            $name = $opts->{no_chdir} ? $cur : catfile $cwd, $cur; # $Win32::Unicode::Dir::name
+            $opts->{wanted}->({
                 file => $::_,
                 path => $name,
+                name => $name,
                 cwd  => $cwd,
+                dir  => $dir,
             });
         }
         
         if (file_type 'd', $cur) {
-            _find($code, $cur, $bydepth);
+            _find($opts, $cur);
             
-            chdirW '..';
-            $cwd = catfile $cwd, '..';
+            $opts->{postprocess}->() if $opts->{postprocess};
+            
+            chdirW '..' unless $opts->{no_chdir};
+            $dir = $cwd = catfile $cwd, '..'; # $Win32::Unicode::Dir::(dir|cwd)
         }
         
-        if ($bydepth) {
-            $::_ = $cur;
-            $name = catfile $cwd, $cur;
-            $code->({
+        if ($opts->{bydepth}) {
+            $::_ = $cur; # $_
+            $name = $opts->{no_chdir} ? $cur : catfile $cwd, $cur; # $Win32::Unicode::Dir::name
+            $opts->{wanted}->({
                 file => $::_,
                 path => $name,
+                name => $name,
                 cwd  => $cwd,
+                dir  => $dir,
             });
         }
     }
-    
-    $wdir->close or _croakW("can't close directory ", errorW);
 }
 
 # get dir size
@@ -340,7 +378,7 @@ sub file_list {
     _croakW('Usage: file_list(dirname)') unless defined $dir;
     
     my $wdir = __PACKAGE__->new->open($dir) or return;
-    return grep { !/^\.{1,2}$/ && file_type f => $_ } $wdir->fetch;
+    return grep { !/^\.{1,2}$/ && file_type f => "$dir/$_" } $wdir->fetch;
 }
 
 sub dir_list {
@@ -348,7 +386,7 @@ sub dir_list {
     _croakW('Usage: dir_list(dirname)') unless defined $dir;
     
     my $wdir = __PACKAGE__->new->open($dir) or return;
-    return grep { !/^\.{1,2}$/ && file_type d => $_ } $wdir->fetch;
+    return grep { !/^\.{1,2}$/ && file_type d => "$dir/$_" } $wdir->fetch;
 }
 
 # return error message
@@ -370,12 +408,12 @@ sub DESTROY {
 __END__
 =head1 NAME
 
-Win32::Unicode::Dir.pm - Unicode string directory utility.
+Win32::Unicode::Dir - Unicode string directory utility.
 
 =head1 SYNOPSIS
 
-  use Win32::Unicode::Console;
   use Win32::Unicode::Dir;
+  use Win32::Unicode::Console;
   
   my $dir = "I \x{2665} Perl";
   
@@ -388,7 +426,6 @@ Win32::Unicode::Dir.pm - Unicode string directory utility.
       if (file_type('f', $full_path)) {
           # $_ is file
       }
-      
       elsif (file_type('d', $full_path))
           # $_ is directory
       }
@@ -411,33 +448,41 @@ Win32::Unicode::Dir is Unicode string directory utility.
 
 =item B<new>
 
+Create a Win32::Unicode::Dir instance.
+
   my $wdir = Win32::Unicode::Dir->new;
 
 =item B<open($dir)>
 
-Like opendir.
+Like CORE::opendir.
 
-  $wdir->open($dir) or dieW $wdir->error;
+  $wdir->open($dir) or die $!
 
 =item B<fetch()>
 
-Like readdir.
+Like CORE::readdir.
 
   while (my $file = $wdir->fetch) {
-     # hogehoge
+     # snip
   }
-  
+
 or
 
   for my $file ($wdir->fetch) {
-     $ hogehoge
+     # snip
   }
-  
-C<read> and C<readdir> is alias of fetch.
+
+=item B<read()>
+
+Alias of C<fetch()>.
+
+=item B<readdir()>
+
+Alias of C<fetch()>.
 
 =item B<close()>
 
-Like closedir.
+Like CORE::closedir.
 
   $wdir->close or dieW $wdir->error
 
@@ -453,78 +498,211 @@ get error message.
 
 =item B<getcwdW>
 
-Like Cwd::getcwd.
+Like Cwd::getcwd. get current directory.
 
   my $cwd = getcwdW;
 
 =item B<chdirW($dir)>
 
-Like chdir.
+Like CORE::chdir.
 
-  chdirW($dir) or dieW errroW;
+  chdirW $dir or die $!;
 
 =item B<mkdirW($new_dir)>
 
-Like mkdir.
+Like CORE::mkdir.
 
-  mkdirW($new_dir) or dieW errorW;
+  mkdirW $new_dir or die $!;
 
 =item B<rmdirW($del_dir)>
 
-Like rmdir.
+Like CORE::rmdir.
 
-  rmdirW($del_dir) or dieW errorW;
+  rmdirW($del_dir) or die $!;
 
 =item B<rmtreeW($del_dir)>
 
 Like File::Path::rmtree.
 
-  rmtreeW($del_dir) or dieW errorW;
+  rmtreeW $del_dir or die $!;
 
 =item B<mkpathW($make_long_dir_name)>
 
 Like File::Path::mkpath.
 
-  mkpathW($make_long_dir_name) or dieW errorW
+  mkpathW $make_long_dir_name or die $!
 
 =item B<cptreeW($from, $to [, $over])>
 
 copy directory tree.
 
-  cptreeW $from, $to or dieW errorW;
+  cptreeW $from, $to or die $!;
+
+If C<$from> delimiter of directory is a terminator, move the contents of C<$from> to C<$to>.
+
+  cptreeW 'foo/', 'hoge';
+  
+  # before current directory tree
+  # ----------------------------
+  # foo
+  # foo/bar
+  # foo/bar/baz
+  # hoge
+  # ----------------------------
+  
+  # before current directory tree
+  # ----------------------------
+  # foo
+  # foo/bar
+  # foo/bar/baz
+  # hoge/
+  # hoge/bar
+  # hoge/bar/baz
+  # ----------------------------
+
+If just a directory name, is as follows
+
+  cptreeW 'foo', 'hoge';
+  
+  # before current directory tree
+  # ----------------------------
+  # foo
+  # foo/bar
+  # foo/bar/baz
+  # hoge
+  # ----------------------------
+  
+  # before current directory tree
+  # ----------------------------
+  # foo
+  # foo/bar
+  # foo/bar/baz
+  # hoge/foo
+  # hoge/foo/bar
+  # hoge/foo/bar/baz
+  # ----------------------------
 
 =item B<mvtreeW($from, $to [, $over]))>
 
 move directory tree.
 
-  mvtreeW $from, $to or dieW errorW;
+  mvtreeW $from, $to or die $!;
+
+If C<$from> delimiter of directory is a terminator, move the contents of C<$from> to C<$to>.
+
+  mvtreeW 'foo/', 'hoge';
+  
+  # before current directory tree
+  # ----------------------------
+  # foo
+  # foo/bar
+  # foo/bar/baz
+  # hoge
+  # ----------------------------
+  
+  # after current directory tree
+  # ----------------------------
+  # foo
+  # hoge
+  # hoge/bar
+  # hoge/bar/baz
+  # ----------------------------
+
+If just a directory name, is as follows
+
+  mvtreeW 'foo', 'hoge';
+  
+  # before current directory tree
+  # ----------------------------
+  # foo
+  # foo/bar
+  # foo/bar/baz
+  # hoge
+  # ----------------------------
+  
+  # after current directory tree
+  # ----------------------------
+  # hoge
+  # hoge/foo
+  # hoge/foo/bar
+  # hoge/foo/bar/baz
+  # ----------------------------
 
 =item B<findW($code, $dir)>
 
 like File::Find::find.
 
-  findW(sub {
+  findW \&wanted, $dir;
+  sub wanted {
       my $file = $_;
-      my $full_path = $Win32::Unicode::Dir::name;
-      my $cwd = $Win32::Unicode::Dir::cwd;
-  }, $dir) or dieW errorW;
+      my $name = $Win32::Unicode::Dir::name;
+      my $dir  = $Win32::Unicode::Dir::dir;
+      my $cwd  = $Win32::Unicode::Dir::cwd; # $dir eq $cwd
+  }
 
 or
-  findW(sub {
+
+  findW \&wanted, @dirs;
+  sub wanted{
       my $arg = shift;
-      printf "%s : %s : %s", $arg->{file}, $arg->{path}, $arg->{cwd};
-  }, $dir) or dieW errorW;
+      print $args->{file}; # eq $_
+      print $args->{name}; # eq $Win32::Unicode::Dir::name
+      print $args->{cwd};  # eq $Win32::Unicode::Dir::cwd
+      print $args->{dir};  # eq $Win32::Unicode::Dir::dir
+      print $args->{path}; # full path
+  }
+
+or
+
+  findW \%options, @dirs;
+
+=back
+
+=head2 \%options
+
+=over 3
+
+=item C<wanted>
+
+The value should be a code reference.
+Like File::Find#wanted
+
+=item C<preprocess>
+
+The value should be a code reference.
+Like File::Find#preprocess
+
+=item C<postprocess>
+
+The value should be a code reference.
+Like File::Find#postprocess
+
+=item C<no_chdir>
+
+Boolean. If you set a true value will not change directories.
+In this case, $_ will be the same as $Win32::Unicode::Dir::name.
+Like File::Find#no_chdir
+
+=back
+
+=over
 
 =item B<finddepthW($code, $dir)>
 
 like File::Find::finddepth.
+
+  finddepthW \&wanted, $driname;
+
+equals to
+
+  findW { wanted => \&wanted, bydepth => 1 }, $dirname;
 
 =item B<dir_size($dir)>
 
 get directory size.
 this function are slow.
 
-  my $dir_size = dir_size($dir) or dieW errorW
+  my $dir_size = dir_size($dir) or die $!
 
 =item B<file_list($dir)>
 
@@ -547,9 +725,13 @@ Yuji Shimada E<lt>xaicron@cpan.orgE<gt>
 =head1 SEE ALSO
 
 L<Win32>
+
 L<Win32API::File>
+
 L<Win32::Unicode>
+
 L<Win32::Unicode::File>
+
 L<Win32::Unicode::Error>
 
 =head1 LICENSE

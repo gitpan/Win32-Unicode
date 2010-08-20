@@ -37,7 +37,9 @@ t/02_export.t
 t/03_encode.t
 t/04_print.t
 t/05_write.t
-t/06_dir.t
+t/06_dir_functions.t
+t/06_dir_methods.t
+t/06_dir_tree.t
 t/07_file.t
 t/07_files/10byte.txt
 t/07_files/dir/dummy.txt
@@ -53,6 +55,11 @@ t/10_read/test.txt
 t/11_write.t
 t/13_system.t
 t/15_flock.t
+t/15_flock_win32.t
+t/15_flock_win32/ex_lock_no_wait.pl
+t/15_flock_win32/ex_lock_wait.pl
+t/15_flock_win32/shared_lock_no_wait.pl
+t/15_flock_win32/shared_lock_wait.pl
 t/30_native.t
 t/31_native_import.t
 t/32_file/open.txt
@@ -61,6 +68,7 @@ t/33_native_dir.t
 t/34_args.t
 t/34_args/args.pl
 t/50_util.t
+t/lib/Test/Win32/Unicode/Util.pm
 win32_unicode.h
 xs/Console.xs
 xs/Dir.xs

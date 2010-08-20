@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.22';
+our $VERSION = '0.23';
 
 use Win32::Unicode::Console ':all';
 use Win32::Unicode::File    ':all';
@@ -56,9 +56,11 @@ our @EXPORT = qw{
     opendir
     closedir
     readdir
+    flock
     file_list
     dir_list
     __FILE__
+    filename_normalize
 };
 
 my $sub_export = sub {
@@ -90,6 +92,8 @@ $sub_export->(qw{
     touchW
     statW
 });
+
+*flock = \&Win32::Unicode::File::flock;
 
 sub open {
     local $Carp::CarpLevel = 1;
@@ -154,7 +158,7 @@ $sub_export->(qw{
 __END__
 =head1 NAME
 
-Win32::Unicode::Native.pm - override some default method
+Win32::Unicode::Native - override some default method
 
 =head1 SYNOPSIS
 
@@ -165,7 +169,7 @@ Win32::Unicode::Native.pm - override some default method
   open my $fh, '<', $unicode_file_name or die error;
   
   opendir my $dh, $unicode_dir_name or die error;
-  
+
 =head1 DESCRIPTION
 
 Wn32::Unicode is a perl unicode-friendly wrapper for win32api.

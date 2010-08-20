@@ -6,7 +6,7 @@ use 5.008003;
 use Carp ();
 use Exporter 'import';
 
-our $VERSION = '0.22';
+our $VERSION = '0.23';
 
 use Errno qw/:POSIX/;
 
@@ -40,16 +40,15 @@ sub _set_errno {
 __END__
 =head1 NAME
 
-Win32::Unicode::Error.pm - return error message.
+Win32::Unicode::Error - return error message.
 
 
 =head1 SYNOPSIS
 
   use Win32::Unicode;
   
-  # stdout unicode string
-  mkdirW($exists_dir) or die errorW
-  
+  mkdirW($exists_dir) or dieW errorW
+
 =head1 DESCRIPTION
 
 Wn32::Unicode::Error is retrun to Win32API error message.
@@ -58,9 +57,9 @@ Wn32::Unicode::Error is retrun to Win32API error message.
 
 =over
 
-=item errorW
+=item B<errorW()>
 
-function.
+get last error message.
 
 =back
 
@@ -71,7 +70,9 @@ Yuji Shimada E<lt>xaicron@gmail.comE<gt>
 =head1 SEE ALSO
 
 L<Win32::Unicode>
+
 L<Win32::Unicode::Dir>
+
 L<Win32::Unicode::File>
 
 =head1 LICENSE

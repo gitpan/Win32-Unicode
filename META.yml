@@ -1,5 +1,5 @@
 ---
-abstract: ~
+abstract: 'perl unicode-friendly wrapper for win32api.'
 author:
   - 'Yuji Shimada <xaicron@cpan.org>'
 build_requires:
@@ -28,4 +28,4 @@ requires:
 resources:
   license: http://dev.perl.org/licenses/
   repository: git://github.com/xaicron/p5-win32-unicode.git
-version: 0.22
+version: 0.23

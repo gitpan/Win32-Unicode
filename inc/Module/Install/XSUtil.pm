@@ -3,7 +3,7 @@ package Module::Install::XSUtil;
 
 use 5.005_03;
 
-$VERSION = '0.24';
+$VERSION = '0.26';
 
 use Module::Install::Base;
 @ISA     = qw(Module::Install::Base);
@@ -46,8 +46,8 @@ sub _xs_initialize{
         $self->{xsu_initialized} = 1;
 
         if(!$self->cc_available()){
-            print "This package requires a C compiler, but it's not available.\n";
-            exit(0);
+            warn "This distribution requires a C compiler, but it's not available, stopped.\n";
+            exit;
         }
 
         $self->configure_requires(%ConfigureRequires);
@@ -142,6 +142,12 @@ sub use_ppport{
     return;
 }
 
+sub _gccversion {
+    my $res = `$Config{cc} --version`;
+    my ($version) = $res =~ /\(GCC\) ([0-9.]+)/;
+    return $version || 0;
+}
+
 sub cc_warnings{
     my($self) = @_;
 
@@ -152,9 +158,10 @@ sub cc_warnings{
         $self->cc_append_to_ccflags(qw(-Wall));
 
         no warnings 'numeric';
-        if($Config{gccversion} >= 4.0){
+        my $gccversion = _gccversion();
+        if($gccversion >= 4.0){
             $self->cc_append_to_ccflags('-Wextra -Wdeclaration-after-statement');
-            if($Config{gccversion} >= 4.1){
+            if($gccversion >= 4.1){
                 $self->cc_append_to_ccflags('-Wc++-compat');
             }
         }
@@ -169,6 +176,44 @@ sub cc_warnings{
         # TODO: support other compilers
     }
 
+    return;
+}
+
+sub c99_available {
+    my($self) = @_;
+    $self->_xs_initialize();
+
+    require File::Temp;
+    require File::Basename;
+
+    my $tmpfile = File::Temp->new(SUFFIX => '.c');
+
+    $tmpfile->print(<<'C99');
+inline // a C99 keyword with C99 style comments
+int test_c99() {
+    int i = 0;
+    i++;
+    int j = i - 1; // another C99 feature: declaration after statement
+    return j;
+}
+C99
+
+    $tmpfile->close();
+
+    system $Config{cc}, '-c', $tmpfile->filename;
+
+    (my $objname = File::Basename::basename($tmpfile->filename)) =~ s/\Q.c\E$/$Config{_o}/;
+    unlink $objname or warn "Cannot unlink $objname (ignored): $!";
+
+    return $? == 0;
+}
+
+sub requires_c99 {
+    my($self) = @_;
+    if(!$self->c99_available) {
+        warn "This distribution requires a C99 compiler, but $Config{cc} seems not to support C99, stopped.\n";
+        exit;
+    }
     return;
 }
 
@@ -339,7 +384,7 @@ sub requires_xs{
     $self->cc_append_to_inc (grep{ !$uniq{ $_ }++ } @inc);
 
     %uniq = ();
-    $self->cc_append_to_libs(grep{ !$uniq{ $_->[0] }++ } @libs);
+    $self->cc_libs(grep{ !$uniq{ $_->[0] }++ } @libs);
 
     return %added;
 }
@@ -582,4 +627,4 @@ sub const_cccmd {
 1;
 __END__
 
-#line 774
+#line 823
