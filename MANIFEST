@@ -16,7 +16,6 @@ inc/Module/Install/XSUtil.pm
 inc/Test/Exception.pm
 inc/Test/More.pm
 inc/Test/Output.pm
-inc/Test/SharedFork.pm
 lib/Win32/Unicode.pm
 lib/Win32/Unicode/Console.pm
 lib/Win32/Unicode/Constant.pm

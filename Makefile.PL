@@ -6,9 +6,7 @@ all_from 'lib/Win32/Unicode.pm';
 use_ppport 3.19;
 cc_warnings;
 
-requires 'Win32API::File';
-requires 'File::Spec';
-requires 'parent';
+requires 'Win32API::File', '0.1101';
 
 tests 't/*.t';
 author_tests 'xt';
@@ -16,7 +14,6 @@ author_tests 'xt';
 build_requires 'Test::More', '0.88';
 test_requires 'Test::Output';
 test_requires 'Test::Exception';
-test_requires 'Test::SharedFork';
 
 cc_src_paths qw(xs);
 

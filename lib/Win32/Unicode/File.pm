@@ -8,7 +8,7 @@ use Win32API::File ();
 use Carp ();
 use File::Basename qw/basename/;
 use Exporter 'import';
-use parent qw/IO::Handle/;
+use base qw/IO::Handle/;
 
 use Win32::Unicode::Util;
 use Win32::Unicode::Error;
@@ -20,7 +20,7 @@ our @EXPORT = qw/file_type file_size copyW moveW unlinkW touchW renameW statW/;
 our @EXPORT_OK = qw/filename_normalize slurp/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.23';
+our $VERSION = '0.24';
 
 my %FILE_TYPE_ATTRIBUTES = (
     s => FILE_ATTRIBUTE_SYSTEM,
