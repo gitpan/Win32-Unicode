@@ -20,7 +20,7 @@ our @EXPORT = qw/file_type file_size copyW moveW unlinkW touchW renameW statW/;
 our @EXPORT_OK = qw/filename_normalize slurp/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 my %FILE_TYPE_ATTRIBUTES = (
     s => FILE_ATTRIBUTE_SYSTEM,
@@ -137,6 +137,11 @@ sub close {
         delete *$self->{_handle};
     }
     return 1;
+}
+
+sub fileno {
+    my $self = shift;
+    return *$self->{_handle};
 }
 
 sub getc {
@@ -296,6 +301,12 @@ sub unlock {
 
 sub slurp {
     my $self = shift;
+    
+    if (!ref $self && file_type(f => $self)) {
+        my $fh = __PACKAGE__->new(r => $self) or die "Can't read $self";
+        return $fh->slurp;
+    }
+    
     $self = tied(*$self);
     
     $self->seek(0, 0);
@@ -338,8 +349,10 @@ sub eof {
 
 sub file_path {
     my $self = shift;
-    return *$self->{_file_path};
+    return *$self->{_file_path} unless @_;
+    *$self->{_file_path} = shift;
 }
+*path = \&file_path;
 
 sub statW {
     my $file = shift;
@@ -590,6 +603,7 @@ sub GETC     { shift->getc        }
 sub SEEK     { shift->seek(@_)    }
 sub TELL     { shift->tell        }
 sub EOF      { shift->eof         }
+sub FILENO   { shift->fileno      }
 sub DESTROY  { shift->close       }
 
 1;

@@ -6,7 +6,7 @@
 #include "ppport.h"
 
 #include <windows.h>
-#define BUFF_SIZE 520
+#define BUFF_SIZE 1024
 
 MODULE = Win32::Unicode::Error  PACKAGE = Win32::Unicode::Error
 
@@ -16,6 +16,14 @@ long
 get_last_error()
     CODE:
         RETVAL = GetLastError();
+    OUTPUT:
+        RETVAL
+
+long
+set_last_error(long error_code)
+    CODE:
+        SetLastError(error_code);
+        RETVAL = error_code;
     OUTPUT:
         RETVAL
 
@@ -34,6 +42,6 @@ foramt_message()
             NULL
         );
         
-        RETVAL = newSVpv(buff, wcslen(buff) * 2);
+        RETVAL = newSVpv(buff, wcslen(buff) * sizeof(WCHAR));
      OUTPUT:
         RETVAL

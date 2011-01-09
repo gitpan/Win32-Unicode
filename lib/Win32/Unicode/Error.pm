@@ -6,7 +6,7 @@ use 5.008003;
 use Carp ();
 use Exporter 'import';
 
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 use Errno qw/:POSIX/;
 
@@ -25,11 +25,13 @@ my %ERROR_TABLE = (
 
 sub errorW {
     my $buff = foramt_message();
-    return utf16_to_utf8($buff);
+    $buff = utf16_to_utf8($buff);
+    $buff =~ s/\r\n$//;
+    return $buff;
 }
 
 sub _set_errno {
-    my $errno = get_last_error();
+    my $errno = $_[0] ? set_last_error($_[0]) : get_last_error();
     $! = $ERROR_TABLE{$errno} || $errno;
     return;
 }
@@ -51,7 +53,7 @@ Win32::Unicode::Error - return error message.
 
 =head1 DESCRIPTION
 
-Wn32::Unicode::Error is retrun to Win32API error message.
+Wn32::Unicode::Error is return to Win32API error message.
 
 =head1 FUNCTIONS
 

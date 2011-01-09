@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 use Win32::Unicode::Console ':all';
 use Win32::Unicode::File    ':all';
@@ -61,6 +61,7 @@ our @EXPORT = qw{
     dir_list
     __FILE__
     filename_normalize
+    slurp
 };
 
 my $sub_export = sub {

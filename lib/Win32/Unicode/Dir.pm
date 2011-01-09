@@ -20,7 +20,7 @@ our @EXPORT    = qw/file_type file_size mkdirW rmdirW getcwdW chdirW findW findd
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 # global vars
 our $cwd;
@@ -712,7 +712,7 @@ get files from $dir
 
 =item B<dir_list($dir)>
 
-get directorys from $dir
+get directories from $dir
 
   my @dirs = dir_list $dir;
 
