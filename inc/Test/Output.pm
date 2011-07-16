@@ -58,7 +58,7 @@ my $Test = Test::Builder->new;
 
 #line 66
 
-$VERSION = '0.16';
+$VERSION = '1.01';
 
 #line 116
 

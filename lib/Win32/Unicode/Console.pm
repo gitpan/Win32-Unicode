@@ -16,7 +16,7 @@ our @EXPORT = qw/printW printfW warnW sayW dieW/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.25';
+our $VERSION = '0.26';
 
 # default std handle
 my $STD_HANDLE = {
@@ -29,11 +29,11 @@ sub _ConsoleOut {
     my $out_handle = shift;
     my $handle = $STD_HANDLE->{$out_handle};
     my $console_handle = shift;
-    return unless @_;
+    @_ = ($_) unless @_;
     
     unless ($console_handle->{$handle}) {
         return warn @_ if $handle == $STD_HANDLE->{&STD_ERROR_HANDLE};
-        if (tied *STDOUT and ref tied *STDOUT eq 'Win32::Unicode::Console::Tie') {
+        if (ref tied *STDOUT eq 'Win32::Unicode::Console::Tie') {
             no warnings 'untie';
             untie *STDOUT;
             print @_;
@@ -43,15 +43,19 @@ sub _ConsoleOut {
         return print @_;
     }
     
-    my $separator = defined $\ ? $\ : '';
-    my $str = join '', @_, $separator;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     
-    while (length $str) {
-        my $tmp_str = substr($str, 0, MAX_BUFFER_SIZE);
-        substr($str, 0, MAX_BUFFER_SIZE) = '';
-        
-        my $buff = 0;
-        write_console($handle, utf8_to_utf16($tmp_str) . NULL);
+    my $separator = defined $\ ? $\ : '';
+    for my $stuff (@_, $separator) {
+        Carp::carp 'Use of uninitialized value in print', next unless defined $stuff;
+        my $str = "$stuff"; # stringify
+        while (length $str) {
+            my $tmp_str = substr($str, 0, MAX_BUFFER_SIZE);
+            substr($str, 0, MAX_BUFFER_SIZE) = '';
+            
+            my $buff = 0;
+            write_console($handle, utf8_to_utf16($tmp_str) . NULL);
+        }
     }
 };
 
@@ -97,7 +101,7 @@ sub _is_file_handle {
 }
 
 sub _syntax_error {
-    local $Carp::CarpLevel = 1;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     Carp::croak "No comma allowed after filehandle";
 }
 

@@ -8,7 +8,7 @@ configure_requires:
   Devel::PPPort: 3.19
   ExtUtils::MakeMaker: 6.42
 distribution_type: module
-generated_by: 'Module::Install version 1.00'
+generated_by: 'Module::Install version 1.01'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -21,9 +21,9 @@ no_index:
     - xt
 requires:
   Win32API::File: 0.1101
-  XSLoader: 0.1
+  XSLoader: 0.02
   perl: 5.8.3
 resources:
   license: http://dev.perl.org/licenses/
-  repository: git://github.com/xaicron/p5-win32-unicode.git
-version: 0.25
+  repository: https://github.com/xaicron/p5-win32-unicode
+version: 0.26

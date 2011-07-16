@@ -7,6 +7,7 @@ use 5.008003;
 use Win32API::File ();
 use Carp ();
 use File::Basename qw/basename/;
+use Scalar::Util qw/blessed/;
 use Exporter 'import';
 use base qw/IO::Handle/;
 
@@ -20,7 +21,7 @@ our @EXPORT = qw/file_type file_size copyW moveW unlinkW touchW renameW statW/;
 our @EXPORT_OK = qw/filename_normalize slurp/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.25';
+our $VERSION = '0.26';
 
 my %FILE_TYPE_ATTRIBUTES = (
     s => FILE_ATTRIBUTE_SYSTEM,
@@ -287,7 +288,7 @@ sub flock {
     my $result = lock_file(*$self->{_handle}, $ope);
     unless (defined $result) {
         require Errno;
-        $! = Errno::EINVAL;
+        $! = Errno::EINVAL();
         return;
     }
     
@@ -358,31 +359,48 @@ sub statW {
     my $file = shift;
     _croakW('Usage: statW(filename)') unless defined $file;
     my $wantarray = wantarray;
-    
+    my $blessed = blessed $file;
+
     my $fi;
-    if (ref $file eq __PACKAGE__) {
+    if ($blessed && $file->isa('Win32::Unicode::File') && *$file->{_handle}) {
         my $fh = *$file;
-        my $file = CYGWIN ? Encode::encode_utf8($fh->{_file_path}) : utf8_to_utf16($fh->{_file_path}) . NULL;
-        $fi = get_stat_data($file, $fh->{_handle}) or return Win32::Unicode::Error::_set_errno;
+        my $file_path = CYGWIN ? Encode::encode_utf8($fh->{_file_path}) : utf8_to_utf16($fh->{_file_path}) . NULL;
+        $fi = get_stat_data($file_path, $fh->{_handle}, 0) or return Win32::Unicode::Error::_set_errno;
+    }
+    elsif ($blessed && $file->isa('Win32::Unicode::Dir') && $file->{handle}) {
+        my $dir_path = CYGWIN ? Encode::encode_utf8($file->{dir}) : utf8_to_utf16($file->{dir}) . NULL;
+        $fi = get_stat_data($dir_path, $file->{handle}, 1) or return Win32::Unicode::Error::_set_errno;
     }
     else {
         $file = cygpathw($file) or return if CYGWIN;
         $file = catfile $file;
-        return unless file_type(f => $file);
-        
-        my $handle = Win32API::File::CreateFileW(
-            utf8_to_utf16($file) . NULL,
-            GENERIC_READ,
-            FILE_SHARE_READ,
-            NULLP,
-            OPEN_EXISTING,
-            FILE_ATTRIBUTE_NORMAL,
-            NULLP,
-        );
+
+        my ($handle, $wdir);
+        if (file_type(d => $file)) {
+            require Win32::Unicode::Dir;
+            $wdir = Win32::Unicode::Dir->new->open($file);
+            $handle = $wdir->{handle};
+        }
+        else {
+            $handle = Win32API::File::CreateFileW(
+                utf8_to_utf16($file) . NULL,
+                GENERIC_READ,
+                FILE_SHARE_READ,
+                NULLP,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                NULLP,
+            );
+        }
         return Win32::Unicode::Error::_set_errno if $handle == INVALID_VALUE;
         $file = CYGWIN ? Encode::encode_utf8($file) : utf8_to_utf16($file) . NULL;
-        $fi = get_stat_data($file, $handle) or return Win32::Unicode::Error::_set_errno;
-        Win32API::File::CloseHandle($handle) or return Win32::Unicode::Error::_set_errno;
+        $fi = get_stat_data($file, $handle, $wdir ? 1 : 0) or return Win32::Unicode::Error::_set_errno;
+        if ($wdir) {
+            $wdir->close or return Win32::Unicode::Error::_set_errno;
+        }
+        else {
+            Win32API::File::CloseHandle($handle) or return Win32::Unicode::Error::_set_errno;
+        }
     }
     
     my $result = $fi;

@@ -19,7 +19,7 @@ my(@XSStack);	# Stack of conditionals and INCLUDEs
 my($XSS_work_idx, $cpp_next_tmp);
 
 use vars qw($VERSION);
-$VERSION = '2.2206';
+$VERSION = '2.2210';
 $VERSION = eval $VERSION if $VERSION =~ /_/;
 
 use vars qw(%input_expr %output_expr $ProtoUsed @InitFileCode $FH $proto_re $Overload $errors $Fallback
@@ -681,7 +681,7 @@ EOF
     # Now do a block of some sort.
 
     $condnum = 0;
-    $cond = '';			# last CASE: condidional
+    $cond = '';			# last CASE: conditional
     push(@line, "$END:");
     push(@line_no, $line_no[-1]);
     $_ = '';
@@ -801,7 +801,7 @@ EOF
 	
 	# 0: type, 1: with_size, 2: how, 3: how_size
 	if ($t and not $t->[1] and $t->[0] eq 'p') {
-	  # PUSHp corresponds to setpvn.  Treate setpv directly
+	  # PUSHp corresponds to setpvn.  Treat setpv directly
 	  my $what = eval qq("$t->[2]");
 	  warn $@ if $@;
 	  
@@ -1005,8 +1005,11 @@ EOF
   print Q(<<"EOF");
 #    PERL_UNUSED_VAR(cv); /* -W */
 #    PERL_UNUSED_VAR(items); /* -W */
+##ifdef XS_APIVERSION_BOOTCHECK
+#    XS_APIVERSION_BOOTCHECK;
+##endif
 EOF
-    
+
   print Q(<<"EOF") if $WantVersionChk ;
 #    XS_VERSION_BOOTCHECK ;
 #
@@ -2028,7 +2031,7 @@ sub DESTROY {
 }
 
 sub UNTIE {
-  # This sub does nothing, but is neccessary for references to be released.
+  # This sub does nothing, but is necessary for references to be released.
 }
 
 sub end_marker {
@@ -2039,4 +2042,4 @@ sub end_marker {
 1;
 __END__
 
-#line 2191
+#line 2194

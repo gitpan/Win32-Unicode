@@ -20,7 +20,7 @@ our @EXPORT    = qw/file_type file_size mkdirW rmdirW getcwdW chdirW findW findd
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.25';
+our $VERSION = '0.26';
 
 # global vars
 our $cwd;
@@ -41,8 +41,8 @@ sub open {
     
     $dir = cygpathw($dir) or return if CYGWIN;
     
-    $self->{dir} = catfile $dir, '*';
-    $dir = utf8_to_utf16($self->{dir}) . NULL;
+    $self->{dir} = $dir;
+    $dir = utf8_to_utf16(catfile $dir, '*') . NULL;
     
     $self->find_first_file($dir);
     return Win32::Unicode::Error::_set_errno if $self->{handle} == INVALID_HANDLE_VALUE;
@@ -244,16 +244,16 @@ sub _cptree {
 sub findW {
     _croakW('Usage: findW(code_ref, dir)') unless @_ >= 2;
     my $opts = shift;
-    _find_wrap($opts, 0, @_);
-    return 1;
+    @_ = ($opts, 0, @_);
+    goto &_find_wrap;
 }
 
 # like File::Find::finddepth
 sub finddepthW {
     _croakW('Usage: finddepthW(code_ref, dir)') unless @_ >= 2;
     my $opts = shift;
-    _find_wrap($opts, 1, @_);
-    return 1;
+    @_ = ($opts, 1, @_);
+    goto &_find_wrap;
 }
 
 sub _find_wrap {
@@ -294,6 +294,8 @@ sub _find_wrap {
         
         $name = $cwd = $dir = undef;
     }
+    
+    return 1;
 }
 
 sub _find {

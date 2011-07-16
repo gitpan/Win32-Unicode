@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.25';
+our $VERSION = '0.26';
 
 use Win32::Unicode::Console ':all';
 use Win32::Unicode::File    ':all';
@@ -81,7 +81,7 @@ $sub_export->(qw{
     sayW
 });
 
-binmode STDOUT => ':utf8';
+binmode STDOUT => ':encoding(utf-8)';
 tie *STDOUT, 'Win32::Unicode::Console::Tie';
 
 # Win32::Unicode::File
@@ -97,14 +97,14 @@ $sub_export->(qw{
 *flock = \&Win32::Unicode::File::flock;
 
 sub open {
-    local $Carp::CarpLevel = 1;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     my $fh = Win32::Unicode::File->new;
     $fh->open($_[1], $_[2]) or return;
     return $_[0] = $fh;
 }
 
 sub close {
-    local $Carp::CarpLevel = 1;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     my $fh = $_[0];
     $fh->close or return;
     $_[0] = undef;
@@ -126,14 +126,14 @@ $sub_export->(qw{
 });
 
 sub opendir {
-    local $Carp::CarpLevel = 1;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     my $dh = Win32::Unicode::Dir->new;
     return unless $dh->open($_[1]);
     return $_[0] = $dh;
 }
 
 sub closedir {
-    local $Carp::CarpLevel = 1;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     my $dh = $_[0];
     $dh->close or return;
     $_[0] = undef;
@@ -141,7 +141,7 @@ sub closedir {
 }
 
 sub readdir {
-    local $Carp::CarpLevel = 1;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     my $dh = shift;
     return $dh->fetch;
 };
