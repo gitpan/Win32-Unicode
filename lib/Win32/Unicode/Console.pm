@@ -16,7 +16,7 @@ our @EXPORT = qw/printW printfW warnW sayW dieW/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.27';
+our $VERSION = '0.28';
 
 # default std handle
 my $STD_HANDLE = {
@@ -107,6 +107,7 @@ sub _syntax_error {
 
 # say Unicode to Console
 sub sayW {
+    @_ = ($_) unless @_;
     printW(@_, "\n");
 }
 
