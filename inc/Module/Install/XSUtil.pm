@@ -3,7 +3,7 @@ package Module::Install::XSUtil;
 
 use 5.005_03;
 
-$VERSION = '0.37';
+$VERSION = '0.39';
 
 use Module::Install::Base;
 @ISA     = qw(Module::Install::Base);
@@ -255,6 +255,17 @@ sub requires_c99 {
     return;
 }
 
+sub requires_cplusplus {
+    my($self) = @_;
+    if(!$self->cc_available) {
+        warn "This distribution requires a C++ compiler, but $Config{cc} seems not to support C++, stopped.\n";
+        exit;
+    }
+    $self->_xs_initialize();
+    $UseCplusplus = 1;
+    return;
+}
+
 sub cc_append_to_inc{
     my($self, @dirs) = @_;
 
@@ -472,6 +483,8 @@ sub cc_src_paths{
     return;
 }
 
+sub cc_inc_paths { goto &cc_include_paths }
+
 sub cc_include_paths{
     my($self, @dirs) = @_;
 
@@ -565,7 +578,10 @@ sub _extract_functions_from_header_file{
             map{ qq{$add_include "$_"} } qw(EXTERN.h perl.h XSUB.h);
 
         my $cppcmd = qq{$Config{cpprun} $cppflags $h_file};
-
+        # remove all the -arch options to workaround gcc errors:
+        #       "-E, -S, -save-temps and -M options are not allowed
+        #        with multiple -arch flags"
+        $cppcmd =~ s/ -arch \s* \S+ //xmsg;
         _verbose("extract functions from: $cppcmd") if _VERBOSE;
         `$cppcmd`;
     };
@@ -773,4 +789,4 @@ sub const_cccmd {
 1;
 __END__
 
-#line 984
+#line 1010
