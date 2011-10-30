@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.31';
+our $VERSION = '0.32';
 
 use Win32::Unicode::Console ':all';
 use Win32::Unicode::File    ':all';
@@ -81,8 +81,10 @@ $sub_export->(qw{
     sayW
 });
 
-binmode STDOUT => ':encoding(utf-8)';
-tie *STDOUT, 'Win32::Unicode::Console::Tie';
+for my $stdh (*STDOUT, *STDERR) {
+    binmode $stdh => ':encoding(utf-8)';
+    tie $stdh, 'Win32::Unicode::Console::Tie';
+}
 
 # Win32::Unicode::File
 $sub_export->(qw{

@@ -21,7 +21,7 @@ our @EXPORT = qw/file_type file_size copyW moveW unlinkW touchW renameW statW ut
 our @EXPORT_OK = qw/filename_normalize slurp/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.31';
+our $VERSION = '0.32';
 
 my %FILE_TYPE_ATTRIBUTES = (
     s => FILE_ATTRIBUTE_SYSTEM,
@@ -112,7 +112,7 @@ sub open {
     require Win32::Unicode::Dir;
     *$self->{_file_path} = File::Spec->rel2abs($file, Win32::Unicode::Dir::getcwdW());
     
-    return 1;
+    return $self;
 }
 
 sub _create_file {
@@ -215,9 +215,18 @@ sub readline {
     }
 }
 
+# no fearture 'say' or $wfh->say(@_);
+sub say {
+    my $self = shift;
+    local $\ = "\n";
+    $self->print(@_);
+}
+
 sub print {
     my $self = shift;
-    $self->write(@_);
+    my $buff = join defined $, ? $, : '', @_;
+    $buff .= $\ if defined $\; # maybe use feature 'say'
+    $self->write($buff);
 }
 
 sub printf {
@@ -628,6 +637,7 @@ sub OPEN     { shift->open(@_)    }
 sub CLOSE    { shift->close       }
 sub BINMODE  { shift->binmode(@_) }
 sub PRINT    { shift->print(@_)   }
+sub PRINTF   { shift->printf(@_)  }
 sub WRITE    { shift->write(@_)   }
 sub READ     { shift->read(@_)    }
 sub READLINE { shift->readline    }

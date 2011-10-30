@@ -5,7 +5,6 @@ author:
 build_requires:
   Devel::PPPort: 3.19
   ExtUtils::MakeMaker: 6.42
-  ExtUtils::ParseXS: 2.21
   Test::Exception: 0.31
   Test::Flatten: 0.04
   Test::More: 0.98
@@ -15,7 +14,7 @@ configure_requires:
   ExtUtils::MakeMaker: 6.42
   ExtUtils::ParseXS: 2.21
 distribution_type: module
-generated_by: 'Module::Install version 1.01'
+generated_by: 'Module::Install version 1.02'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -34,4 +33,4 @@ resources:
   bugtracker: https://github.com/xaicron/p5-win32-unicode/issues
   license: http://dev.perl.org/licenses/
   repository: https://github.com/xaicron/p5-win32-unicode
-version: 0.31
+version: 0.32
