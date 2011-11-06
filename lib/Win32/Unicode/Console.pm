@@ -3,7 +3,6 @@ package Win32::Unicode::Console;
 use strict;
 use warnings;
 use 5.008003;
-use utf8;
 use Carp ();
 use Exporter 'import';
 
@@ -16,7 +15,7 @@ our @EXPORT = qw/printW printfW warnW sayW dieW/;
 our @EXPORT_OK = qw//;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.32';
+our $VERSION = '0.33';
 
 # default std handle
 my $STD_HANDLE = {
@@ -141,6 +140,7 @@ sub dieW {
 }
 
 sub _shortmess {
+    require Encode;
     CYGWIN ? Encode::decode_utf8(Carp::shortmess('')) : Encode::decode(cp932 => Carp::shortmess(''));
 }
 

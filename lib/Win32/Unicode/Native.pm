@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.32';
+our $VERSION = '0.33';
 
 use Win32::Unicode::Console ':all';
 use Win32::Unicode::File    ':all';
@@ -15,9 +15,10 @@ use Win32::Unicode::Error ();
 use Win32::Unicode::Constant qw/CYGWIN/;
 use Win32::Unicode::Util;
 use Win32::Unicode::XS;
+use Encode ();
 
-do {
-    @main::ARGV = ();
+BEGIN {
+    @ARGV = ();
     my $enc = Encode::find_encoding(CYGWIN ? 'utf8' : 'cp932');
     my $script = $enc->decode($0);
     my @args = @{parse_argv()};
@@ -40,7 +41,7 @@ do {
             }
             next;
         }
-        push @main::ARGV, $argv;
+        push @ARGV, $argv;
     }
     
     sub __FILE__ () { $script }

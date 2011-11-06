@@ -2,10 +2,10 @@ package Win32::Unicode::Constant;
 
 use strict;
 use warnings;
-use Carp ();
+use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.32';
+our $VERSION = '0.33';
 our @EXPORT = grep { !/import|BEGIN|EXPORT/ && Win32::Unicode::Constant->can($_) } keys %Win32::Unicode::Constant::;
 
 use constant CYGWIN  => $^O eq 'cygwin';

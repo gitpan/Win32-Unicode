@@ -68,6 +68,7 @@ xs/Error.xs
 xs/File.xs
 xs/Native.xs
 xs/Process.xs
+xs/Util.xs
 xs/XS.xs
 xt/01_podspell.t
 xt/02_perlcritic.t
