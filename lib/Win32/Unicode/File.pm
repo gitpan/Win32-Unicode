@@ -18,7 +18,7 @@ our @EXPORT = qw/file_type file_size copyW moveW unlinkW touchW renameW statW ut
 our @EXPORT_OK = qw/filename_normalize slurp/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.33';
+our $VERSION = '0.34';
 
 my %FILE_TYPE_ATTRIBUTES = (
     s => FILE_ATTRIBUTE_SYSTEM,
@@ -498,9 +498,11 @@ sub touchW {
     my @files = @_ ? @_ : ($_);
     my $count = 0;
     for my $file (@files) {
-        $file = cygpathw($file) or return if CYGWIN;
-        $file = catfile $file;
-        $count += Win32::CreateFile($file) ? 1 : 0;
+        $file = cygpathw($file) or next if CYGWIN;
+        my $utf16_file = utf8_to_utf16(catfile $file) . NULL;
+        my $handle = _create_file($utf16_file, GENERIC_WRITE, CREATE_NEW) or next;
+        $count++;
+        close_handle($handle);
     }
     Win32::Unicode::Error::_set_errno unless $count;
     return $count;
