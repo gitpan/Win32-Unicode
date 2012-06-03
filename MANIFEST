@@ -44,6 +44,7 @@ t/08_error.t
 t/09_normalize.t
 t/10_read.t
 t/10_read/test.txt
+t/10_read_with_offset.t
 t/11_write.t
 t/13_system.t
 t/15_flock.t
@@ -61,13 +62,13 @@ t/34_args.t
 t/34_args/args.pl
 t/50_util.t
 t/lib/Test/Win32/Unicode/Util.pm
-win32_unicode.h
 xs/Console.xs
 xs/Dir.xs
 xs/Error.xs
 xs/File.xs
 xs/Native.xs
 xs/Process.xs
+xs/typemap
 xs/Util.xs
 xs/XS.xs
 xt/01_podspell.t

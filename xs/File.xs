@@ -24,12 +24,11 @@ MODULE = Win32::Unicode::File   PACKAGE = Win32::Unicode::File
 
 PROTOTYPES: DISABLE
 
-long
-create_file(SV* file, long amode, long smode, long opt, long attr)
+HANDLE
+create_file(WCHAR *filename, long amode, long smode, long opt, long attr)
     CODE:
-        const WCHAR* file_name = SvPV_nolen(file);
         RETVAL = CreateFileW(
-            file_name,
+            filename,
             amode,
             smode,
             NULL,
@@ -41,136 +40,131 @@ create_file(SV* file, long amode, long smode, long opt, long attr)
         RETVAL
 
 void
-win32_read_file(long handle, long count)
+win32_read_file(HANDLE handle, DWORD count)
     CODE:
-        char buff[count];
-        long len;
+        char  *ptr, *buff;
+        bool  has_error = 0;
+        DWORD len       = 0;
+
+        Newxz(ptr, count + 1, char);
+        buff = ptr;
         if (!ReadFile(handle, buff, count, &len, NULL)) {
             if (GetLastError() != NO_ERROR) {
-                len = -1;
+                has_error = 1;
             }
             else {
                 len = 0;
             }
         }
-        buff[len] = NULL;
-        
-        ST(0) = newSViv(len);
-        ST(1) = newSVpv(buff, 0);
+        buff[len] = '\0';
+        Safefree(ptr);
+
+        ST(0) = has_error ? sv_2mortal(newSViv(-1)) : sv_2mortal(newSVuv(len));
+        ST(1) = sv_2mortal(newSVpvn(buff, len));
         XSRETURN(2);
 
-void
-win32_write_file(long handle, char* buff, long size)
+SV *
+win32_write_file(HANDLE handle, char *buff, DWORD size)
     CODE:
-        long len;
+        bool has_error = 0;
+        DWORD len;
         if (!WriteFile(handle, buff, size, &len, NULL)) {
             if (GetLastError() != NO_ERROR) {
-                len = -1;
+                has_error = 1;
             }
             else {
                 len = 0;
             }
         }
-        
-        ST(0) = newSViv(len);
-        XSRETURN(1);
 
-int
-delete_file(SV* file)
+        RETVAL = has_error ? newSViv(-1) : newSVuv(len);
+    OUTPUT:
+        RETVAL
+
+bool
+delete_file(WCHAR *filename)
     CODE:
-        const WCHAR* file_name = SvPV_nolen(file);
-        RETVAL = DeleteFileW(file_name);
+        RETVAL = DeleteFileW(filename);
     OUTPUT:
         RETVAL
 
 long
-get_file_attributes(SV* file)
+get_file_attributes(WCHAR *filename)
     CODE:
-        const WCHAR* file_name = SvPV_nolen(file);
-        RETVAL = GetFileAttributesW(file_name);
+        RETVAL = GetFileAttributesW(filename);
     OUTPUT:
         RETVAL
 
 void
-get_file_size(long handle)
+get_file_size(HANDLE handle)
     CODE:
         LARGE_INTEGER st;
-        SV* sv = sv_2mortal(newSV(0));
-        HV* hv = sv_2mortal(newHV());
-        
+        HV* hv    = newHV();
+        SV* hvref = sv_2mortal(newRV_noinc((SV *)hv));
+
         if (GetFileSizeEx(handle, &st) == 0) {
             XSRETURN_EMPTY;
         }
-        
-        sv_setsv(sv, newRV_noinc((SV*)hv));
+
         hv_stores(hv, "high", newSVnv(st.HighPart));
         hv_stores(hv, "low", newSVnv(st.LowPart));
-        
-        ST(0) = sv;
+
+        ST(0) = hvref;
         XSRETURN(1);
 
-int
-copy_file(SV* from, SV* to, int over)
+bool
+copy_file(WCHAR *from, WCHAR *to, bool over)
     CODE:
-        const WCHAR* from_name = SvPV_nolen(from);
-        const WCHAR* to_name   = SvPV_nolen(to);
-        
-        RETVAL = CopyFileW(from_name, to_name, over);
+        RETVAL = CopyFileW(from, to, over);
     OUTPUT:
         RETVAL
 
-int
-move_file(SV* from, SV* to)
+bool
+move_file(WCHAR *from, WCHAR *to)
     CODE:
-        const WCHAR* from_name = SvPV_nolen(from);
-        const WCHAR* to_name   = SvPV_nolen(to);
-        
-        RETVAL = MoveFileW(from_name, to_name);
+        RETVAL = MoveFileW(from, to);
     OUTPUT:
         RETVAL
 
 void
-set_file_pointer(long handle, long lpos, long hpos, int whence)
+set_file_pointer(HANDLE handle, long lpos, long hpos, int whence)
     CODE:
         LARGE_INTEGER mv;
         LARGE_INTEGER st;
-        SV* sv = sv_2mortal(newSV(0));
-        HV* hv = sv_2mortal(newHV());
-        
+        HV* hv    = newHV();
+        SV* hvref = sv_2mortal(newRV_noinc((SV *)hv));
+
         mv.LowPart  = lpos;
         mv.HighPart = hpos;
-        
+
         if (SetFilePointerEx(handle, mv, &st, whence) == 0) {
             XSRETURN_EMPTY;
         }
-        
-        sv_setsv(sv, newRV_noinc((SV*)hv));
+
         hv_stores(hv, "high", newSVnv(st.HighPart));
         hv_stores(hv, "low", newSVnv(st.LowPart));
-        
-        ST(0) = sv;
+
+        ST(0) = hvref;
         XSRETURN(1);
 
 void
-get_stat_data(SV* file, long handle, int is_dir)
+get_stat_data(WCHAR *filename, HANDLE handle, bool is_dir)
     CODE:
-        struct stat st;
+        struct _stat st;
         BY_HANDLE_FILE_INFORMATION fi;
-        SV* sv = sv_2mortal(newSV(0));
-        HV* hv = sv_2mortal(newHV());
-        const WCHAR* file_name = SvPV_nolen(file);
-        
-        if (_STAT(file_name, &st) != 0) {
+        HV* hv    = newHV();
+        SV* hvref = sv_2mortal(newRV_noinc((SV *)hv));
+
+        if (_STAT(filename, &st) != 0) {
             XSRETURN_EMPTY;
         }
-        
+
         if (!is_dir) {
             if (GetFileInformationByHandle(handle, &fi) == 0) {
                 XSRETURN_EMPTY;
             }
         }
-        
-        sv_setsv(sv, newRV_noinc((SV*)hv));
+
         hv_stores(hv, "dev", newSViv(st.st_dev));
         hv_stores(hv, "ino", newSViv(st.st_ino));
         hv_stores(hv, "mode", newSViv(st.st_mode));
@@ -193,18 +187,18 @@ get_stat_data(SV* file, long handle, int is_dir)
             hv_stores(hv, "size_high", newSViv(fi.nFileSizeHigh));
             hv_stores(hv, "size_low", newSViv(fi.nFileSizeLow));
         }
-        
-        ST(0) = sv;
+
+        ST(0) = hvref;
         XSRETURN(1);
 
-int
-lock_file(long handle, int ope)
+bool
+lock_file(HANDLE handle, int ope)
     CODE:
         long option = 0;
         OVERLAPPED ol;
         ol.Offset = 0;
         ol.OffsetHigh = 0;
-        
+
         switch(ope) {
             case 1:
                 break;
@@ -221,35 +215,33 @@ lock_file(long handle, int ope)
                 XSRETURN_EMPTY;
                 break;
         }
-        
+
         RETVAL = LockFileEx(handle, option, 0, 0xFFFFFFFF, 0xFFFFFFFF, &ol);
     OUTPUT:
         RETVAL
 
-int
-unlock_file(long handle)
+bool
+unlock_file(HANDLE handle)
     CODE:
         OVERLAPPED ol;
         ol.Offset = 0;
         ol.OffsetHigh = 0;
-        
+
         RETVAL = UnlockFileEx(handle, 0, 0xFFFFFFFF, 0xFFFFFFFF, &ol);
     OUTPUT:
         RETVAL
 
-int
-update_time(long atime, long mtime, SV* file)
+bool
+update_time(long atime, long mtime, WCHAR *filename)
     CODE:
         struct _utimbuf ut;
-        const WCHAR* file_name = SvPV_nolen(file);
-        
         ut.actime  = atime;
         ut.modtime = mtime;
-        
-        if (_UTIME(file_name, &ut) == -1) {
+
+        if (_UTIME(filename, &ut) == -1) {
             XSRETURN_EMPTY;
         }
-        
+
         RETVAL = 1;
     OUTPUT:
         RETVAL

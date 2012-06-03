@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.34';
+our $VERSION = '0.35';
 our @EXPORT = grep { !/import|BEGIN|EXPORT/ && Win32::Unicode::Constant->can($_) } keys %Win32::Unicode::Constant::;
 
 use constant CYGWIN  => $^O eq 'cygwin';
@@ -25,8 +25,6 @@ sub STD_INPUT_HANDLE      () { -10 }
 sub STD_OUTPUT_HANDLE     () { -11 }
 sub STD_ERROR_HANDLE      () { -12 }
 sub MAX_BUFFER_SIZE       () { 20000 }
-sub CONSOLE_OUTPUT_HANDLE () { +{7  => 1, 11 => 1, 15 => 1} }
-sub CONSOLE_ERROR_HANDLE  () { +{11 => 1, 15 => 1} }
 
 # file attribute
 sub FILE_ATTRIBUTE_READONLY            () { 0x00000001 }

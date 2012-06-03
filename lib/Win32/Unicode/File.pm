@@ -18,7 +18,7 @@ our @EXPORT = qw/file_type file_size copyW moveW unlinkW touchW renameW statW ut
 our @EXPORT_OK = qw/filename_normalize slurp/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.34';
+our $VERSION = '0.35';
 
 my %FILE_TYPE_ATTRIBUTES = (
     s => FILE_ATTRIBUTE_SYSTEM,
@@ -150,12 +150,21 @@ sub read {
     my $self = shift;
     my $into = \$_[0]; shift;
     my $len = shift;
-#    my $offset = shift;
+    my $offset = shift || 0;
     
     my ($bytes_read_num, $data) = win32_read_file(*$self->{_handle}, $len);
     return Win32::Unicode::Error::_set_errno if $bytes_read_num == -1;
     
-    $$into = $data if defined $data;
+    if ($offset > 0) {
+        substr($$into, $offset) = $data if length($$into) >= $offset;
+    }
+    elsif ($offset < 0) {
+        _croakW('Offset outside string') if length($$into) + $offset < 0;
+        substr($$into, $offset) = $data;
+    }
+    else {
+        $$into = $data;
+    }
     
     if (*$self->{_encode} && $$into) {
         $$into = *$self->{_encode}->decode($$into);

@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.34';
+our $VERSION = '0.35';
 
 use Win32::Unicode::Console ':all';
 use Win32::Unicode::File    ':all';
@@ -27,13 +27,16 @@ BEGIN {
         my $argv = utf16_to_utf8 shift @args;
         unless ($flag) {
             if ($script eq '-e') {
-                if ($argv =~ /^\-[a-z0-9]*e$/i) {
+                use bytes;
+                next if $argv =~ /^-[ImMCD]/;
+                next if $argv =~ /^-d:/;
+                if ($argv =~ /^-.*[eE]$/) {
                     $flag++;
-                    shift @args; # skip next -e
+                    shift @args; # next argument is program
                 }
             }
-            elsif ($script eq '-') {
-                $flag++ if $argv eq '-';
+            elsif ($script eq '-' && $argv eq '-') {
+                $flag++;
             }
             elsif (rel2abs($script) eq rel2abs($argv)) {
                 $0 = $script;

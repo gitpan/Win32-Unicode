@@ -3,7 +3,7 @@ package Module::Install::XSUtil;
 
 use 5.005_03;
 
-$VERSION = '0.40';
+$VERSION = '0.42';
 
 use Module::Install::Base;
 @ISA     = qw(Module::Install::Base);
@@ -458,9 +458,10 @@ sub cc_src_paths{
         }
     }, @dirs);
 
+    my $xs_to = $UseCplusplus ? '.cpp' : '.c';
     foreach my $src_file(@src_files){
         my $c = $src_file;
-        if($c =~ s/ \.xs \z/.c/xms){
+        if($c =~ s/ \.xs \z/$xs_to/xms){
             $XS_ref->{$src_file} = $c;
 
             _verbose "xs: $src_file" if _VERBOSE;
@@ -481,8 +482,6 @@ sub cc_src_paths{
 
     return;
 }
-
-sub cc_inc_paths { goto &cc_include_paths }
 
 sub cc_include_paths{
     my($self, @dirs) = @_;
@@ -758,7 +757,7 @@ package
     MY;
 
 # XXX: We must append to PM inside ExtUtils::MakeMaker->new().
-sub init_PM{
+sub init_PM {
     my $self = shift;
 
     $self->SUPER::init_PM(@_);
@@ -785,7 +784,22 @@ sub const_cccmd {
 
     return $cccmd
 }
+
+sub xs_c {
+    my($self) = @_;
+    my $mm = $self->SUPER::xs_c();
+    $mm =~ s/ \.c /.cpp/xmsg if $UseCplusplus;
+    return $mm;
+}
+
+sub xs_o {
+    my($self) = @_;
+    my $mm = $self->SUPER::xs_o();
+    $mm =~ s/ \.c /.cpp/xmsg if $UseCplusplus;
+    return $mm;
+}
+
 1;
 __END__
 
-#line 1009
+#line 1025

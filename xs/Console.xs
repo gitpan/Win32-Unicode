@@ -11,18 +11,27 @@ MODULE = Win32::Unicode::Console    PACKAGE = Win32::Unicode::Console
 
 PROTOTYPES: DISABLE
 
-long
-get_std_handle(long handle)
+HANDLE
+get_std_handle(DWORD std_handle)
     CODE:
-        RETVAL = GetStdHandle(handle);
+        RETVAL = GetStdHandle(std_handle);
     OUTPUT:
         RETVAL
 
-void
-write_console(long handle, SV* str)
-    PPCODE:
-        const WCHAR* buff = SvPV_nolen(str);
+bool
+write_console(HANDLE handle, WCHAR *buff)
+    CODE:
         DWORD write_size;
-        
-        WriteConsoleW(handle, buff, wcslen(buff), &write_size, NULL);
 
+        RETVAL = WriteConsoleW(handle, buff, wcslen(buff), &write_size, NULL);
+    OUTPUT:
+        RETVAL
+
+bool
+is_console(HANDLE handle)
+    CODE:
+        CONSOLE_SCREEN_BUFFER_INFO info;
+
+        RETVAL = GetConsoleScreenBufferInfo(handle, &info);
+    OUTPUT:
+        RETVAL

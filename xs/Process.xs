@@ -12,35 +12,33 @@ MODULE = Win32::Unicode::Process  PACKAGE = Win32::Unicode::Process
 PROTOTYPES: DISABLE
 
 long
-wait_for_single_object(long handle)
+wait_for_single_object(HANDLE handle)
     CODE:
         RETVAL = WaitForSingleObject(handle, INFINITE);
     OUTPUT:
         RETVAL
 
 long
-wait_for_input_idle(long handle)
+wait_for_input_idle(HANDLE handle)
     CODE:
         RETVAL = WaitForInputIdle(handle, INFINITE);
     OUTPUT:
         RETVAL
 
 void
-create_process(SV* shell, SV* cmd)
+create_process(WCHAR *shell, WCHAR* cmd)
     CODE:
-        const WCHAR*        cshell = SvPV_nolen(shell);
-        WCHAR*              ccmd = SvPV_nolen(cmd);
         STARTUPINFOW        si;
         PROCESS_INFORMATION pi;
-        SV* sv = sv_2mortal(newSV(0));
-        HV* hv = sv_2mortal(newHV());
-        
+        HV* hv    = newHV();
+        SV* hvref = sv_2mortal(newRV_noinc((SV *)hv));
+
         ZeroMemory(&si,sizeof(si));
         si.cb=sizeof(si);
-        
+
         if (CreateProcessW(
-            cshell,
-            ccmd,
+            shell,
+            cmd,
             NULL,
             NULL,
             FALSE,
@@ -52,16 +50,15 @@ create_process(SV* shell, SV* cmd)
         ) == 0) {
             XSRETURN_EMPTY;
         }
-        
-        sv_setsv(sv, newRV_noinc((SV*)hv));
-        hv_stores(hv, "thread_handle", newSViv(pi.hThread));
-        hv_stores(hv, "process_handle", newSViv(pi.hProcess));
-        
-        ST(0) = sv;
+
+        hv_stores(hv, "thread_handle", newSViv((long)pi.hThread));
+        hv_stores(hv, "process_handle", newSViv((long)pi.hProcess));
+
+        ST(0) = hvref;
         XSRETURN(1);
 
-long
-get_exit_code(long handle)
+bool
+get_exit_code(HANDLE handle)
     CODE:
         DWORD exit_code;
         if (GetExitCodeProcess(handle, &exit_code) == 0) {
