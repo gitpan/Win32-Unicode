@@ -33,4 +33,4 @@ resources:
   bugtracker: https://github.com/xaicron/p5-win32-unicode/issues
   license: http://dev.perl.org/licenses/
   repository: https://github.com/xaicron/p5-win32-unicode
-version: 0.35
+version: 0.36
