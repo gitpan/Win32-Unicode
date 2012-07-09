@@ -57,10 +57,11 @@ win32_read_file(HANDLE handle, DWORD count)
             }
         }
         buff[len] = '\0';
-        Safefree(ptr);
 
         ST(0) = has_error ? sv_2mortal(newSViv(-1)) : sv_2mortal(newSVuv(len));
         ST(1) = sv_2mortal(newSVpvn(buff, len));
+
+        Safefree(ptr);
         XSRETURN(2);
 
 SV *
@@ -78,6 +79,13 @@ win32_write_file(HANDLE handle, char *buff, DWORD size)
         }
 
         RETVAL = has_error ? newSViv(-1) : newSVuv(len);
+    OUTPUT:
+        RETVAL
+
+bool
+win32_flush_file_buffers(HANDLE handle)
+    CODE:
+        RETVAL = FlushFileBuffers(handle);
     OUTPUT:
         RETVAL
 

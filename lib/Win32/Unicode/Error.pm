@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.36';
+our $VERSION = '0.37';
 
 use Win32::Unicode::Constant;
 use Win32::Unicode::Util;
@@ -25,13 +25,13 @@ sub errorW {
 
 my $ERROR_TABLE;
 sub _set_errno {
+    my $errno = $_[0] ? set_last_error($_[0]) : get_last_error();
     unless ($ERROR_TABLE) {
         require Errno;
         $ERROR_TABLE = {
             ERROR_FILE_EXISTS, => Errno::EEXIST(),
         };
     }
-    my $errno = $_[0] ? set_last_error($_[0]) : get_last_error();
     $! = $ERROR_TABLE->{$errno} || $errno;
     return;
 }

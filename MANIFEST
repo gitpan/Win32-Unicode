@@ -46,6 +46,7 @@ t/10_read.t
 t/10_read/test.txt
 t/10_read_with_offset.t
 t/11_write.t
+t/12_syswrite.t
 t/13_system.t
 t/15_flock.t
 t/15_flock_win32.t
