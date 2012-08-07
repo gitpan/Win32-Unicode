@@ -4,8 +4,8 @@ use strict;
 use warnings;
 use 5.008003;
 use Carp qw(croak);
-use File::Basename qw/basename/;
-use Scalar::Util qw/blessed/;
+use File::Basename qw(basename);
+use Scalar::Util qw(blessed);
 use Exporter 'import';
 
 use Win32::Unicode::Util;
@@ -13,12 +13,13 @@ use Win32::Unicode::Error;
 use Win32::Unicode::Constant;
 use Win32::Unicode::Console;
 use Win32::Unicode::XS;
+use Fcntl qw(:seek);
 
 our @EXPORT = qw/file_type file_size copyW moveW unlinkW touchW renameW statW utimeW/;
 our @EXPORT_OK = qw/filename_normalize slurp/;
 our %EXPORT_TAGS = ('all' => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.37';
+our $VERSION = '0.38';
 
 my %FILE_TYPE_ATTRIBUTES = (
     s => FILE_ATTRIBUTE_SYSTEM,
@@ -37,10 +38,10 @@ my %FILE_TYPE_ATTRIBUTES = (
 sub new {
     my $class = shift;
     $class = ref $class || $class;
-    
+
     my $self = bless \do { local *FH }, $class;
     tie *$self, $class, $self;
-    
+
     $self->open(@_) or return if @_;
     return $self;
 }
@@ -48,65 +49,59 @@ sub new {
 sub open {
     my ($self, $attr, $file) = @_;
     croak('Usage: $wfh->open($attrebute, $filename)') unless defined $attr && defined $file;
-    
+
     $file = cygpathw($file) or return if CYGWIN;
     my $utf16_file = utf8_to_utf16(catfile $file) . NULL;
-    
+
     if ($attr =~ s/(:.*)$//) {
         $self->binmode($1);
     }
-    
+
     my $handle = 
         $attr eq '<' || $attr eq 'r' || $attr eq 'rb' ? _create_file(
             $utf16_file,
             GENERIC_READ,
             OPEN_EXISTING,
         ) :
-        
         $attr eq '>' || $attr eq 'w' || $attr eq 'wb' ? _create_file(
             $utf16_file,
             GENERIC_WRITE,
             CREATE_ALWAYS,
         ) :
-        
         $attr eq '>>' || $attr eq 'a' ? _create_file(
             $utf16_file,
             GENERIC_WRITE,
             OPEN_ALWAYS,
         ) :
-        
         $attr eq '+<' || $attr eq 'r+' ? _create_file(
             $utf16_file,
             GENERIC_READ | GENERIC_WRITE,
             OPEN_EXISTING,
         ) :
-        
         $attr eq '+>' || $attr eq 'w+' ? _create_file(
             $utf16_file,
             GENERIC_READ | GENERIC_WRITE,
             CREATE_ALWAYS,
         ) :
-        
         $attr eq '+>>' || $attr eq 'a+' ? _create_file(
             $utf16_file,
             GENERIC_READ | GENERIC_WRITE,
             OPEN_ALWAYS,
         ) :
-        
         croak("'$attr' is unkown attribute")
     or return Win32::Unicode::Error::_set_errno;
-    
+
     return Win32::Unicode::Error::_set_errno if $handle == INVALID_VALUE;
-    
+
     *$self->{_handle} = $handle;
     $self->binmode if $attr eq 'rb' or $attr eq 'wb';
-    
+
     $self->seek(0, 2) if $attr eq '>>' || $attr eq 'a' || $attr eq '+>>' || $attr eq 'a+';
-    
+
     require Win32::Unicode::Dir;
     *$self->{_file_path} = File::Spec->rel2abs($file, Win32::Unicode::Dir::getcwdW());
     *$self->{_authflush} = 0;
-    
+
     return $self;
 }
 
@@ -114,7 +109,7 @@ sub _create_file {
     my $file = shift;
     my $type = shift;
     my $disp = shift;
-    
+
     return create_file(
         $file,
         $type,
@@ -145,14 +140,14 @@ sub getc {
 }
 
 sub read {
-    my $self = shift;
-    my $into = \$_[0]; shift;
-    my $len = shift;
+    my $self   = shift;
+    my $into   = \$_[0]; shift;
+    my $len    = shift;
     my $offset = shift || 0;
-    
+
     my ($bytes_read_num, $data) = win32_read_file(*$self->{_handle}, $len);
     return Win32::Unicode::Error::_set_errno if $bytes_read_num == -1;
-    
+
     if ($offset > 0) {
         substr($$into, $offset) = $data if length($$into) >= $offset;
     }
@@ -163,44 +158,44 @@ sub read {
     else {
         $$into = $data;
     }
-    
-    if (*$self->{_encode} && $$into) {
+
+    if (*$self->{_encode} && length $$into) {
         $$into = *$self->{_encode}->decode($$into);
     }
-    
+
     return $bytes_read_num;
 }
 *sysread = *read;
 
 sub _readline {
     my $self = shift;
-    
+
     my $encoder;
     if (*$self->{_encode}) {
         $encoder = *$self->{_encode};
         delete *$self->{_encode};
     }
-    
+
     my $line = '';
     while (index($line, $/) == $[ -1) {
         my $char = $self->getc;
         last if not defined $char or $char eq '';
         $line .= $char;
     }
-    
-    $line =~ s/\r\n/\n/ unless *$self->{_binmode};
-    
+
+    $line =~ s/\015\012/\n/ unless *$self->{_binmode};
+
     if ($encoder) {
         $line = $encoder->decode($line);
         *$self->{_encode} = $encoder;
     }
-    
+
     return $line eq '' ? () : $line;
 };
 
 sub readline {
     my $self = shift;
-    
+
     if (wantarray) {
         my @lines;
         while (my $line = $self->_readline) {
@@ -241,12 +236,12 @@ sub write {
 sub syswrite {
     return 0 if @_ > 2 && !$_[2];
     my ($self, $buff, $len, $offset) = @_;
-    
+
     $buff =~ s/\r?\n/\r\n/g unless *$self->{_binmode};
     $buff = *$self->{_encode}->encode($buff) if *$self->{_encode};
-    
+
     use bytes;
-    
+
     $buff = substr $buff, $offset if $offset;
     unless (defined $len) {
         $len = length $buff;
@@ -254,16 +249,16 @@ sub syswrite {
     elsif ((my $buff_len = length $buff) < $len) {
         $len = $buff_len;
     }
-    
+
     croak('got negative length on syswrite()') if $len < 0;
-    
+
     my $write_size = win32_write_file(*$self->{_handle}, $buff, $len);
     return Win32::Unicode::Error::_set_errno if $write_size == -1;
-    
+
     if (*$self->{_autoflush}) {
         $self->flush or return;
     }
-    
+
     return $write_size;
 }
 
@@ -271,7 +266,7 @@ sub seek {
     my $self = shift;
     my $low = shift;
     my $whence = shift;
-    
+
     my $result;
     if (is64int($low)) {
         my ($pos_low, $pos_high);
@@ -296,25 +291,25 @@ sub seek {
 *sysseek = *seek;
 
 sub tell {
-    $_[0]->seek(0, 1);
+    $_[0]->seek(0, SEEK_CUR);
 }
 
 sub flock {
     my $self = shift;
     $self = tied(*$self);
     my $ope = shift;
-    
+
     croak('Usage: flock $fh, $operation') unless defined $ope;
-    
+
     return unlock_file(*$self->{_handle}) if $ope == 8;
-    
+
     my $result = lock_file(*$self->{_handle}, $ope);
     unless (defined $result) {
         require Errno;
         $! = Errno::EINVAL();
         return;
     }
-    
+
     return $result;
 }
 *flockW = \&flock;
@@ -325,49 +320,110 @@ sub unlock {
 
 sub slurp {
     my $self = shift;
-    
-    if (!ref $self && file_type(f => $self)) {
-        my $fh = __PACKAGE__->new(r => $self) or die "Can't read $self";
-        return $fh->slurp;
+    croak 'Usage: slurp(filename) or $fh->slurp()' unless defined $self;
+
+    my $opts = ref $_[0] eq 'HASH' ? shift : { @_ };
+    my $wantarray = wantarray;
+
+    unless (ref $self) {
+        my $fh = __PACKAGE__->new(r => $self) or croak "Can't read '$self': $!";
+        return $fh->slurp($opts);
     }
-    
-    $self = tied(*$self);
-    
-    $self->seek(0, 0);
-    $self->read(my $buff, $self->file_size);
-    return $buff;
+
+    my $org_data = {
+        pos     => $self->tell,
+        binmode => *$self->{_binmode},
+        encode  => *$self->{_encode},
+    };
+
+    if (exists $opts->{binmode}) {
+        $self->binmode($opts->{binmode});
+    }
+
+    my $buf_ref = $opts->{buf_ref} || \my $buf;
+    $$buf_ref   = '';
+
+    my $file_size = $self->file_size;
+    unless ($file_size) {
+        return
+            $opts->{scalar_ref} ? $buf_ref :
+            $opts->{array_ref}  ? []       :
+            $wantarray          ? ()       : '';
+    }
+
+    $self->seek(0, SEEK_SET);
+    my $blk_size  = $opts->{blk_size} || 1024 * 1024;
+    if ($file_size <= $blk_size) {
+        $self->read($$buf_ref, $blk_size);
+    }
+    else {
+        1 while $self->read($$buf_ref, $blk_size, length $$buf_ref);
+    }
+    $self->seek($org_data->{pos}, SEEK_SET);
+
+    $$buf_ref =~ s/\015\012/\n/g unless *$self->{_binmode};
+
+    *$self->{_binmode} = $org_data->{binmode};
+    *$self->{_encode}  = $org_data->{encode};
+
+    if ($wantarray || $opts->{array_ref}) {
+        my $sep = $/;
+        $sep = '\n\n+' if defined $sep && $sep eq '';
+
+        my @lines = length $$buf_ref ? $$buf_ref =~ /(.*?$sep|.+)/sg : ();
+        chomp @lines if $opts->{chomp};
+
+        return \@lines if $opts->{array_ref};
+        return @lines;
+    }
+
+    return $buf_ref if $opts->{scalar_ref};
+    return $$buf_ref if defined $wantarray;
+    return;
+}
+*readfile = *slurp;
+
+sub write_file {
+    my $self = shift;
+
+    if (!ref $self) {
+        my $fh = __PACKAGE__->new(w => $self) or croak("$self: $!");
+        return $fh->print(@_);
+    }
+
+    return $self->print(@_);
 }
 
 sub binmode {
     my $self = shift;
     my $layer = shift;
-    
+
     if (not defined $layer or $layer eq 1) {
         *$self->{_binmode} = 1;
         return 1;
     }
-    
+
     if (defined $layer) {
         if ($layer =~ /:raw/) {
             *$self->{_binmode} = 1;
         }
-        
+
         if ($layer =~ /:(utf-?8)/i or $layer =~ /:encoding\(([^\)]+)\)/) {
             *$self->{_encode} = Encode::find_encoding($1);
         }
-        
+
         croak("Unknown layer $layer") unless *$self->{_binmode} or *$self->{_encode}
     }
-    
+
     return 1;
 }
 
 sub eof {
     my $self = shift;
-    
+
     my $current = $self->TELL() + 0;
     my $end     = file_size($self) + 0;
-    
+
     return $current == $end;
 }
 
@@ -423,7 +479,7 @@ sub statW {
             close_handle($handle) or return Win32::Unicode::Error::_set_errno;
         }
     }
-    
+
     my $result = $fi;
     unless (CYGWIN) {
         $result->{blksize} = '';
@@ -432,7 +488,7 @@ sub statW {
     $result->{size} = $fi->{size_high} ? to64int($fi->{size_high}, $fi->{size_low}) : $fi->{size_low};
     delete $result->{size_high};
     delete $result->{size_low};
-    
+
     return $wantarray ? (
         $result->{dev},     #  0 dev      device number of filesystem
         $result->{ino},     #  1 ino      inode number
@@ -470,19 +526,19 @@ sub file_type {
     my $file = shift;
     $file = cygpathw($file) or return if CYGWIN;
     $file = catfile $file;
-    
+
     my $get_attr = _get_file_type($file);
     return unless defined $get_attr;
     for (split //, $attr) {
         if ($_ eq 'e') {
             next;
         }
-        
+
         if ($_ eq 'f') {
             return if $get_attr & $FILE_TYPE_ATTRIBUTES{d};
             next;
         }
-        
+
         unless (defined $FILE_TYPE_ATTRIBUTES{$_}) {
             Carp::carp "unkown attribute '$_'";
             next;
@@ -495,18 +551,18 @@ sub file_type {
 sub file_size {
     my $file = shift;
     croak('Usage: file_size(filename)') unless defined $file;
-    
+
     if (ref $file eq __PACKAGE__) {
         my $self = "$file" =~ /GLOB/ ? tied *$file : $file;
         my $st = get_file_size(*$self->{_handle}) or return Win32::Unicode::Error::_set_errno;
         return $st->{high} ? to64int($st->{high}, $st->{low}) : $st->{low};
     }
-    
+
     $file = cygpathw($file) or return if CYGWIN;
     $file = catfile $file;
-    
+
     return unless file_type(f => $file);
-    
+
     my $handle = create_file(
         utf8_to_utf16($file) . NULL,
         GENERIC_READ,
@@ -515,10 +571,10 @@ sub file_size {
         FILE_ATTRIBUTE_NORMAL,
     );
     return Win32::Unicode::Error::_set_errno if $handle == INVALID_VALUE;
-    
+
     my $st = get_file_size($handle) or return Win32::Unicode::Error::_set_errno;
     close_handle($handle) or return Win32::Unicode::Error::_set_errno;
-    
+
     return $st->{high} ? to64int($st->{high}, $st->{low}) : $st->{low};
 }
 
@@ -555,13 +611,13 @@ sub copyW {
     croak('Usage: copyW(from, to [, over])') if @_ < 2;
     my ($from, $to) = _file_name_validete(shift, shift);
     my $over = shift || 0;
-    
+
     $from = cygpathw($from) or return if CYGWIN;
     $to   = cygpathw($to)   or return if CYGWIN;
-    
+
     $from = utf8_to_utf16($from) . NULL;
     $to   = utf8_to_utf16($to) . NULL;
-    
+
     return copy_file($from, $to, !$over) ? 1 : Win32::Unicode::Error::_set_errno;
 }
 
@@ -570,12 +626,12 @@ sub moveW {
     croak('Usage: moveW(from, to [, over])') if @_ < 2;
     my ($from, $to) = _file_name_validete(shift, shift);
     my $over = shift || 0;
-    
+
     unless (move_file(utf8_to_utf16($from) . NULL, utf8_to_utf16($to) . NULL)) {
         return unless copyW($from, $to, $over);
         return unless unlinkW($from);
     };
-    
+
     return 1;
 }
 *renameW = \&moveW;
@@ -586,15 +642,15 @@ my $in_dir      = qr#[\\/]$#;
 sub _file_name_validete {
     croak('from is a undefined values') unless defined $_[0];
     croak('to is a undefined values')   unless defined $_[1];
-    
+
     my $from = catfile shift;
     my $to = shift;
-    
+
     if ($to =~ $back_to_dir or $to =~ $in_dir or (CYGWIN ? file_type(d => cygpathw($to)) : file_type(d => $to))) {
         $to = catfile $to, basename($from);
     }
     $to = catfile $to;
-    
+
     return $from, $to;
 }
 
@@ -657,7 +713,7 @@ sub flush {
 }
 
 sub sync {
-    _croakW('sync not implemented');
+    croak('sync not implemented');
 }
 
 sub autoflush {
@@ -672,6 +728,36 @@ sub printflush {
     $self->print(@_) && $self->flush;
 }
 
+sub getline  {
+    croak('Usage: $fh->getline()') unless @_ == 1;
+    scalar shift->readline;
+}
+
+sub getlines {
+    croak('Usage: $fh->getlines()') unless @_ == 1;
+    croak(q|Can't call $fh->getlines in a scalar context, use $fh->getline|)
+        unless wantarray;
+    shift->readline;
+}
+
+sub getpos {
+    croak('Usage: $fh->getpos()') unless @_ == 1;
+    my $pos = shift->tell;
+    return $pos == -1 ? undef : $pos; ## no critic
+}
+
+sub setpos {
+    croak('Usage: $fh->setpos($pos)') unless @_ == 2;
+    my ($self, $pos) = @_;
+    $self->seek($pos, 0);
+    return $pos == -1 ? undef : $pos; ## no critic
+}
+
+sub opened {
+    my $self = shift;
+    return exists *$self->{_handle} ? 1 : 0;
+}
+
 1;
 __END__
 =head1 NAME
@@ -681,9 +767,9 @@ Win32::Unicode::File - Unicode string file utility.
 =head1 SYNOPSIS
 
   use Win32::Unicode::File;
-  
+
   my $file = "I \x{2665} Perl";
-  
+
   unlinkW $file or die $!;
   copyW $from, $to or die $!;
   moveW $from, $to or die $!;
@@ -840,7 +926,7 @@ Currently available now is only the layer below.
   :utf8
   :encoding(foo)
 
-=item B<flock()>
+=item B<flock($operation)>
 
 Like CORE::flock
 
@@ -881,6 +967,36 @@ write after flush.
 same as
 
   $fh->print('foobar') && $fh->flush;
+
+=item B<getline()>
+
+Like C<< IO::File::getline >>.
+
+  my $line = $fh->getline;
+
+=item B<getlines()>
+
+Like C<< IO::File::getlines >>.
+
+  my @$lines = $fh->getlines;
+
+=item B<getpos()>
+
+Like C<< IO::File::getpos >>.
+
+  my $pos = $fh->getpos;
+
+=item B<setpos($pos)>
+
+Like C<< IO::File::setpos >>.
+
+  my $pos = $fh->setpos(10);
+
+=item B<opened()>
+
+Returns true if the object is currentry opened file, false otherwise.
+
+  say $fh->opened ? 1 : 0;
 
 =back
 

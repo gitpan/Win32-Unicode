@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.37';
+our $VERSION = '0.38';
 
 use Win32::Unicode::Console ':all';
 use Win32::Unicode::File    ':all';
@@ -46,7 +46,7 @@ BEGIN {
         }
         push @ARGV, $argv;
     }
-    
+
     sub __FILE__ () { $script }
 };
 
@@ -171,11 +171,11 @@ Win32::Unicode::Native - override some default method
 =head1 SYNOPSIS
 
   use Win32::Unicode::Native;
-  
+
   print $flagged_utf8;
-  
+
   open my $fh, '<', $unicode_file_name or die error;
-  
+
   opendir my $dh, $unicode_dir_name or die error;
 
 =head1 DESCRIPTION

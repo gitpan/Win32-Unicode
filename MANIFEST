@@ -54,6 +54,8 @@ t/15_flock_win32/ex_lock_no_wait.pl
 t/15_flock_win32/ex_lock_wait.pl
 t/15_flock_win32/shared_lock_no_wait.pl
 t/15_flock_win32/shared_lock_wait.pl
+t/16_io_handle_like.t
+t/17_slurp.t
 t/30_native.t
 t/31_native_import.t
 t/32_file/open.txt
@@ -76,4 +78,5 @@ xt/01_podspell.t
 xt/02_perlcritic.t
 xt/03_pod.t
 xt/04_threads.t
+xt/10_text_csv.t
 xt/perlcriticrc

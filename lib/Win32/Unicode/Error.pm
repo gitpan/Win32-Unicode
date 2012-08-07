@@ -5,7 +5,7 @@ use warnings;
 use 5.008003;
 use Exporter 'import';
 
-our $VERSION = '0.37';
+our $VERSION = '0.38';
 
 use Win32::Unicode::Constant;
 use Win32::Unicode::Util;
@@ -48,7 +48,7 @@ Win32::Unicode::Error - return error message.
 =head1 SYNOPSIS
 
   use Win32::Unicode;
-  
+
   mkdirW($exists_dir) or dieW errorW
 
 =head1 DESCRIPTION
